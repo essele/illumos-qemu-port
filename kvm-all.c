@@ -18,7 +18,11 @@
 #include <sys/mman.h>
 #include <stdarg.h>
 
+#ifdef __sun__
+#include <sys/kvm.h>
+#else
 #include <linux/kvm.h>
+#endif
 
 #include "qemu-common.h"
 #include "qemu-barrier.h"
@@ -179,12 +183,23 @@ int kvm_physical_memory_addr_from_host(KVMState *s, void *ram,
 static int kvm_set_user_memory_region(KVMState *s, KVMSlot *slot)
 {
     struct kvm_userspace_memory_region mem;
+#ifdef CONFIG_SOLARIS
+    caddr_t p;
+    char c;
+#endif
 
     mem.slot = slot->slot;
     mem.guest_phys_addr = slot->start_addr;
     mem.memory_size = slot->memory_size;
     mem.userspace_addr = (unsigned long)slot->ram;
     mem.flags = slot->flags;
+#ifdef CONFIG_SOLARIS
+    for (p = (caddr_t)mem.userspace_addr;
+      p < (caddr_t)mem.userspace_addr + mem.memory_size;
+      p += PAGE_SIZE)
+        c = *p;
+#endif /* CONFIG_SOLARIS */
+
     if (s->migration_log) {
         mem.flags |= KVM_MEM_LOG_DIRTY_PAGES;
     }
@@ -203,6 +218,29 @@ int kvm_pit_in_kernel(void)
     return kvm_state->pit_in_kernel;
 }
 
+#ifdef CONFIG_SOLARIS
+static int kvm_vm_clone(KVMState *s)
+{
+    struct stat stat;
+    int fd;
+
+    if (fstat(s->fd, &stat) != 0)
+        return -errno;
+
+    fd = qemu_open("/dev/kvm", O_RDWR);
+
+    if (fd == -1)
+         return -errno;
+
+    if (ioctl(fd, KVM_CLONE, stat.st_rdev) == -1) {
+        close(fd);
+        return -errno;
+    }
+
+    return fd;
+}
+#endif
+
 int kvm_init_vcpu(CPUArchState *env)
 {
     KVMState *s = kvm_state;
@@ -211,14 +249,29 @@ int kvm_init_vcpu(CPUArchState *env)
 
     DPRINTF("kvm_init_vcpu\n");
 
+#ifdef CONFIG_SOLARIS
+    ret = kvm_vm_clone(kvm_state);
+
+    if (ret < 0) {
+        fprintf(stderr, "kvm_init_vcpu could not clone fd: %m\n");
+        goto err;
+    }
+    env->kvm_fd = ret;
+    env->kvm_state = kvm_state;
+
+    ret = ioctl(env->kvm_fd, KVM_CREATE_VCPU, env->cpu_index);
+#else
     ret = kvm_vm_ioctl(s, KVM_CREATE_VCPU, env->cpu_index);
+#endif
     if (ret < 0) {
         DPRINTF("kvm_create_vcpu failed\n");
         goto err;
     }
 
+#ifndef CONFIG_SOLARIS
     env->kvm_fd = ret;
     env->kvm_state = s;
+#endif
     env->kvm_vcpu_dirty = 1;
 
     mmap_size = kvm_ioctl(s, KVM_GET_VCPU_MMAP_SIZE, 0);
@@ -1024,6 +1077,9 @@ int kvm_init(void)
         ret = s->vmfd;
         goto err;
     }
+#ifdef CONFIG_SOLARIS
+		s->vmfd = s->fd;
+#endif
 
     missing_cap = kvm_check_extension_list(s, kvm_required_capabilites);
     if (!missing_cap) {
@@ -1290,6 +1346,19 @@ int kvm_cpu_exec(CPUArchState *env)
             DPRINTF("irq_window_open\n");
             ret = EXCP_INTERRUPT;
             break;
+#ifdef CONFIG_SOLARIS
+        /*
+         * In the case of an external interrupt we can get a zero
+         * return from the ioctl, with a KVM_EXIT_INTR. This doesn't
+         * happen on linux
+         *
+         * Not entirely sure what to do here.
+         */
+        case KVM_EXIT_INTR:
+            DPRINTF("exit_intr (run_ret is %d)\n", run_ret);
+            ret = EXCP_INTERRUPT;
+            break;
+#endif
         case KVM_EXIT_SHUTDOWN:
             DPRINTF("shutdown\n");
             qemu_system_reset_request();
@@ -1634,7 +1703,7 @@ int kvm_set_signal_mask(CPUArchState *env, const sigset_t *sigset)
 
     sigmask = g_malloc(sizeof(*sigmask) + sizeof(*sigset));
 
-    sigmask->len = 8;
+    sigmask->len = sizeof(sigset_t);
     memcpy(sigmask->sigset, sigset, sizeof(*sigset));
     r = kvm_vcpu_ioctl(env, KVM_SET_SIGNAL_MASK, sigmask);
     g_free(sigmask);
@@ -1644,6 +1713,7 @@ int kvm_set_signal_mask(CPUArchState *env, const sigset_t *sigset)
 
 int kvm_set_ioeventfd_mmio_long(int fd, uint32_t addr, uint32_t val, bool assign)
 {
+#ifdef CONFIG_EVENTFD
     int ret;
     struct kvm_ioeventfd iofd;
 
@@ -1668,10 +1738,14 @@ int kvm_set_ioeventfd_mmio_long(int fd, uint32_t addr, uint32_t val, bool assign
     }
 
     return 0;
+#else
+		return -ENOSYS;
+#endif
 }
 
 int kvm_set_ioeventfd_pio_word(int fd, uint16_t addr, uint16_t val, bool assign)
 {
+#ifdef CONFIG_EVENTFD
     struct kvm_ioeventfd kick = {
         .datamatch = val,
         .addr = addr,
@@ -1691,6 +1765,9 @@ int kvm_set_ioeventfd_pio_word(int fd, uint16_t addr, uint16_t val, bool assign)
         return r;
     }
     return 0;
+#else
+		return -ENOSYS;
+#endif
 }
 
 int kvm_on_sigbus_vcpu(CPUArchState *env, int code, void *addr)

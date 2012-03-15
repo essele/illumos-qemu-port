@@ -3,6 +3,10 @@
 #include "qemu_socket.h"
 #include "qga/channel.h"
 
+#ifdef CONFIG_SOLARIS
+#include <sys/stropts.h>
+#endif
+
 #define GA_CHANNEL_BAUDRATE_DEFAULT B38400 /* for isa-serial channels */
 
 struct GAChannel {
@@ -123,7 +127,19 @@ static gboolean ga_channel_open(GAChannel *c, const gchar *path, GAChannelMethod
 
     switch (c->method) {
     case GA_CHANNEL_VIRTIO_SERIAL: {
+#ifdef CONFIG_SOLARIS
+        int fd = qemu_open(path, O_RDWR | O_NONBLOCK);
+        if (fd == -1) {
+            g_critical("error opening channel: %s", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        if(ioctl(fd, I_SETSIG, S_OUTPUT | S_INPUT | S_HIPRI) < 0) {
+            g_critical("error with setsig on channel: %s", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+#else
         int fd = qemu_open(path, O_RDWR | O_NONBLOCK | O_ASYNC);
+#endif
         if (fd == -1) {
             g_critical("error opening channel: %s", strerror(errno));
             exit(EXIT_FAILURE);

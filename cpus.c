@@ -455,7 +455,7 @@ static void cpu_signal(int sig)
     exit_request = 1;
 }
 
-#ifdef CONFIG_LINUX
+#if defined(CONFIG_LINUX) || defined(CONFIG_SOLARIS)
 static void sigbus_reraise(void)
 {
     sigset_t set;
@@ -491,7 +491,9 @@ static void qemu_init_sigbus(void)
     action.sa_sigaction = (void (*)(int, siginfo_t*, void*))sigbus_handler;
     sigaction(SIGBUS, &action, NULL);
 
+#ifndef __sun__
     prctl(PR_MCE_KILL, PR_MCE_KILL_SET, PR_MCE_KILL_EARLY, 0, 0);
+#endif
 }
 
 static void qemu_kvm_eat_signals(CPUArchState *env)

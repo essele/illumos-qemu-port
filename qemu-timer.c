@@ -77,7 +77,7 @@ struct qemu_alarm_timer {
     int (*start)(struct qemu_alarm_timer *t);
     void (*stop)(struct qemu_alarm_timer *t);
     void (*rearm)(struct qemu_alarm_timer *t, int64_t nearest_delta_ns);
-#if defined(__linux__)
+#if defined(__linux__) || defined(__sun__)
     int fd;
     timer_t timer;
 #elif defined(_WIN32)
@@ -165,7 +165,7 @@ static int unix_start_timer(struct qemu_alarm_timer *t);
 static void unix_stop_timer(struct qemu_alarm_timer *t);
 static void unix_rearm_timer(struct qemu_alarm_timer *t, int64_t delta);
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun__)
 
 static int dynticks_start_timer(struct qemu_alarm_timer *t);
 static void dynticks_stop_timer(struct qemu_alarm_timer *t);
@@ -177,7 +177,7 @@ static void dynticks_rearm_timer(struct qemu_alarm_timer *t, int64_t delta);
 
 static struct qemu_alarm_timer alarm_timers[] = {
 #ifndef _WIN32
-#ifdef __linux__
+#if defined(__linux__) || defined(__sun__)
     {"dynticks", dynticks_start_timer,
      dynticks_stop_timer, dynticks_rearm_timer},
 #endif
@@ -502,7 +502,7 @@ static void host_alarm_handler(int host_signum)
     }
 }
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__sun__)
 
 #include "compatfd.h"
 
@@ -585,7 +585,7 @@ static void dynticks_rearm_timer(struct qemu_alarm_timer *t,
     }
 }
 
-#endif /* defined(__linux__) */
+#endif /* defined(__linux__) || defined(__sun__) */
 
 #if !defined(_WIN32)
 

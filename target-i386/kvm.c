@@ -17,8 +17,12 @@
 #include <sys/mman.h>
 #include <sys/utsname.h>
 
+#ifdef __sun__
+#include <sys/kvm.h>
+#else
 #include <linux/kvm.h>
 #include <linux/kvm_para.h>
+#endif
 
 #include "qemu-common.h"
 #include "sysemu.h"
@@ -61,7 +65,9 @@ const KVMCapabilityInfo kvm_arch_required_capabilities[] = {
 static bool has_msr_star;
 static bool has_msr_hsave_pa;
 static bool has_msr_tsc_deadline;
+#ifdef KVM_CAP_ASYNC_PF
 static bool has_msr_async_pf_en;
+#endif
 static bool has_msr_misc_enable;
 static int lm_capable_kernel;
 
@@ -97,7 +103,9 @@ struct kvm_para_features {
     { KVM_CAP_CLOCKSOURCE, KVM_FEATURE_CLOCKSOURCE },
     { KVM_CAP_NOP_IO_DELAY, KVM_FEATURE_NOP_IO_DELAY },
     { KVM_CAP_PV_MMU, KVM_FEATURE_MMU_OP },
+#ifdef KVM_CAP_ASYNC_PF
     { KVM_CAP_ASYNC_PF, KVM_FEATURE_ASYNC_PF },
+#endif
     { -1, -1 }
 };
 
@@ -442,7 +450,9 @@ int kvm_arch_init_vcpu(CPUX86State *env)
         c->edx = signature[2];
     }
 
+#ifdef KVM_CAP_ASYNC_PF
     has_msr_async_pf_en = c->eax & (1 << KVM_FEATURE_ASYNC_PF);
+#endif
 
     cpu_x86_cpuid(env, 0, 0, &limit, &unused, &unused, &unused);
 
@@ -561,6 +571,7 @@ int kvm_arch_init_vcpu(CPUX86State *env)
         return r;
     }
 
+#ifdef KVM_CAP_TSC_CONTROL
     r = kvm_check_extension(env->kvm_state, KVM_CAP_TSC_CONTROL);
     if (r && env->tsc_khz) {
         r = kvm_vcpu_ioctl(env, KVM_SET_TSC_KHZ, env->tsc_khz);
@@ -569,10 +580,12 @@ int kvm_arch_init_vcpu(CPUX86State *env)
             return r;
         }
     }
-
+#endif
+#ifdef KVM_CAP_XSAVE
     if (kvm_has_xsave()) {
         env->kvm_xsave_buf = qemu_memalign(4096, sizeof(struct kvm_xsave));
     }
+#endif
 
     return 0;
 }
@@ -759,7 +772,7 @@ static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
                  (rhs->avl * DESC_AVL_MASK);
 }
 
-static void kvm_getput_reg(__u64 *kvm_reg, target_ulong *qemu_reg, int set)
+static void kvm_getput_reg(uint64_t *kvm_reg, target_ulong *qemu_reg, int set)
 {
     if (set) {
         *kvm_reg = *qemu_reg;
@@ -841,6 +854,7 @@ static int kvm_put_fpu(CPUX86State *env)
 #define XSAVE_XSTATE_BV   128
 #define XSAVE_YMMH_SPACE  144
 
+#ifdef KVM_CAP_XSAVE
 static int kvm_put_xsave(CPUX86State *env)
 {
     struct kvm_xsave* xsave = env->kvm_xsave_buf;
@@ -874,7 +888,9 @@ static int kvm_put_xsave(CPUX86State *env)
     r = kvm_vcpu_ioctl(env, KVM_SET_XSAVE, xsave);
     return r;
 }
+#endif
 
+#ifdef KVM_CAP_XSCRS
 static int kvm_put_xcrs(CPUX86State *env)
 {
     struct kvm_xcrs xcrs;
@@ -889,6 +905,7 @@ static int kvm_put_xcrs(CPUX86State *env)
     xcrs.xcrs[0].value = env->xcr0;
     return kvm_vcpu_ioctl(env, KVM_SET_XCRS, &xcrs);
 }
+#endif
 
 static int kvm_put_sregs(CPUX86State *env)
 {
@@ -1000,10 +1017,12 @@ static int kvm_put_msrs(CPUX86State *env, int level)
         kvm_msr_entry_set(&msrs[n++], MSR_KVM_SYSTEM_TIME,
                           env->system_time_msr);
         kvm_msr_entry_set(&msrs[n++], MSR_KVM_WALL_CLOCK, env->wall_clock_msr);
+#ifdef KVM_CAP_ASYNC_PF
         if (has_msr_async_pf_en) {
             kvm_msr_entry_set(&msrs[n++], MSR_KVM_ASYNC_PF_EN,
                               env->async_pf_en_msr);
         }
+#endif
         if (hyperv_hypercall_available()) {
             kvm_msr_entry_set(&msrs[n++], HV_X64_MSR_GUEST_OS_ID, 0);
             kvm_msr_entry_set(&msrs[n++], HV_X64_MSR_HYPERCALL, 0);
@@ -1055,6 +1074,7 @@ static int kvm_get_fpu(CPUX86State *env)
     return 0;
 }
 
+#ifdef KVM_CAP_XSAVE
 static int kvm_get_xsave(CPUX86State *env)
 {
     struct kvm_xsave* xsave = env->kvm_xsave_buf;
@@ -1092,7 +1112,9 @@ static int kvm_get_xsave(CPUX86State *env)
             sizeof env->ymmh_regs);
     return 0;
 }
+#endif
 
+#ifdef KVM_CAP_XCRS
 static int kvm_get_xcrs(CPUX86State *env)
 {
     int i, ret;
@@ -1116,6 +1138,7 @@ static int kvm_get_xcrs(CPUX86State *env)
     }
     return 0;
 }
+#endif
 
 static int kvm_get_sregs(CPUX86State *env)
 {
@@ -1243,9 +1266,11 @@ static int kvm_get_msrs(CPUX86State *env)
 #endif
     msrs[n++].index = MSR_KVM_SYSTEM_TIME;
     msrs[n++].index = MSR_KVM_WALL_CLOCK;
+#ifdef KVM_CAP_ASYNC_PF
     if (has_msr_async_pf_en) {
         msrs[n++].index = MSR_KVM_ASYNC_PF_EN;
     }
+#endif
 
     if (env->mcg_cap) {
         msrs[n++].index = MSR_MCG_STATUS;
@@ -1322,9 +1347,11 @@ static int kvm_get_msrs(CPUX86State *env)
                 env->mce_banks[msrs[i].index - MSR_MC0_CTL] = msrs[i].data;
             }
             break;
+#ifdef KVM_CAP_ASYNC_PF
         case MSR_KVM_ASYNC_PF_EN:
             env->async_pf_en_msr = msrs[i].data;
             break;
+#endif
         }
     }
 
@@ -1482,6 +1509,7 @@ static int kvm_guest_debug_workarounds(CPUX86State *env)
     return ret;
 }
 
+#ifdef KVM_CAP_DEBUGREGS
 static int kvm_put_debugregs(CPUX86State *env)
 {
     struct kvm_debugregs dbgregs;
@@ -1522,6 +1550,7 @@ static int kvm_get_debugregs(CPUX86State *env)
 
     return 0;
 }
+#endif
 
 int kvm_arch_put_registers(CPUX86State *env, int level)
 {
@@ -1533,14 +1562,20 @@ int kvm_arch_put_registers(CPUX86State *env, int level)
     if (ret < 0) {
         return ret;
     }
+#ifdef KVM_CAP_XSAVE
     ret = kvm_put_xsave(env);
+#else
+    ret = kvm_put_fpu(env);
+#endif
     if (ret < 0) {
         return ret;
     }
+#ifdef KVM_CAP_XCRS
     ret = kvm_put_xcrs(env);
     if (ret < 0) {
         return ret;
     }
+#endif
     ret = kvm_put_sregs(env);
     if (ret < 0) {
         return ret;
@@ -1568,10 +1603,12 @@ int kvm_arch_put_registers(CPUX86State *env, int level)
     if (ret < 0) {
         return ret;
     }
+#ifdef KVM_CAP_DEBUGREGS
     ret = kvm_put_debugregs(env);
     if (ret < 0) {
         return ret;
     }
+#endif
     /* must be last */
     ret = kvm_guest_debug_workarounds(env);
     if (ret < 0) {
@@ -1590,14 +1627,20 @@ int kvm_arch_get_registers(CPUX86State *env)
     if (ret < 0) {
         return ret;
     }
+#ifdef KVM_CAP_XSAVE
     ret = kvm_get_xsave(env);
+#else
+    ret = kvm_get_fpu(env);
+#endif
     if (ret < 0) {
         return ret;
     }
+#ifdef KVM_CAP_XCRS
     ret = kvm_get_xcrs(env);
     if (ret < 0) {
         return ret;
     }
+#endif
     ret = kvm_get_sregs(env);
     if (ret < 0) {
         return ret;
@@ -1618,10 +1661,12 @@ int kvm_arch_get_registers(CPUX86State *env)
     if (ret < 0) {
         return ret;
     }
+#ifdef KVM_CAP_DEBUGREGS
     ret = kvm_get_debugregs(env);
     if (ret < 0) {
         return ret;
     }
+#endif
     return 0;
 }
 
@@ -1770,6 +1815,7 @@ static int kvm_handle_tpr_access(CPUX86State *env)
     return 1;
 }
 
+#ifdef KVM_CAP_SET_GUEST_DEBUG
 int kvm_arch_insert_sw_breakpoint(CPUX86State *env, struct kvm_sw_breakpoint *bp)
 {
     static const uint8_t int3 = 0xcc;
@@ -1950,6 +1996,7 @@ void kvm_arch_update_guest_debug(CPUX86State *env, struct kvm_guest_debug *dbg)
         }
     }
 }
+#endif /* KVM_CAP_SET_GUEST_DEBUG */
 
 static bool host_supports_vmx(void)
 {
@@ -1999,10 +2046,12 @@ int kvm_arch_handle_exit(CPUX86State *env, struct kvm_run *run)
                 run->ex.exception, run->ex.error_code);
         ret = -1;
         break;
+#ifdef KVM_CAP_SET_GUEST_DEBUG
     case KVM_EXIT_DEBUG:
         DPRINTF("kvm_exit_debug\n");
         ret = kvm_handle_debug(&run->debug.arch);
         break;
+#endif
     default:
         fprintf(stderr, "KVM: unknown exit reason %d\n", run->exit_reason);
         ret = -1;

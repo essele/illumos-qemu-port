@@ -101,6 +101,7 @@ audio_win_int=""
 cc_i386=i386-pc-linux-gnu-gcc
 libs_qga=""
 debug_info="yes"
+shell="sh"
 
 target_list=""
 
@@ -442,6 +443,7 @@ SunOS)
   # have to select again, because `uname -m` returns i86pc
   # even on an x86_64 box.
   solariscpu=`isainfo -k`
+  shell="bash"
   if test "${solariscpu}" = "amd64" ; then
     cpu="x86_64"
   fi
@@ -471,6 +473,7 @@ SunOS)
   QEMU_CFLAGS="-D__EXTENSIONS__ $QEMU_CFLAGS"
   QEMU_CFLAGS="-std=gnu99 $QEMU_CFLAGS"
   LIBS="-lsocket -lnsl -lresolv $LIBS"
+  libs_qga="-lsocket -lxnet $lib_qga"
 ;;
 AIX)
   aix="yes"
@@ -1097,7 +1100,7 @@ echo "  --disable-docs           disable documentation build"
 echo "  --disable-vhost-net      disable vhost-net acceleration support"
 echo "  --enable-vhost-net       enable vhost-net acceleration support"
 echo "  --enable-trace-backend=B Set trace backend"
-echo "                           Available backends:" $("$source_path"/scripts/tracetool --list-backends)
+echo "                           Available backends:" $($shell "$source_path"/scripts/tracetool --list-backends)
 echo "  --with-trace-file=NAME   Full PATH,NAME of file to store traces"
 echo "                           Default:trace-<pid>"
 echo "  --disable-spice          disable spice"
@@ -2654,7 +2657,7 @@ fi
 ##########################################
 # check if trace backend exists
 
-sh "$source_path/scripts/tracetool" "--$trace_backend" --check-backend > /dev/null 2> /dev/null
+$shell "$source_path/scripts/tracetool" "--$trace_backend" --check-backend > /dev/null 2> /dev/null
 if test "$?" -ne 0 ; then
   echo
   echo "Error: invalid trace backend"
@@ -3358,6 +3361,7 @@ echo "LIBS+=$LIBS" >> $config_host_mak
 echo "LIBS_TOOLS+=$libs_tools" >> $config_host_mak
 echo "EXESUF=$EXESUF" >> $config_host_mak
 echo "LIBS_QGA+=$libs_qga" >> $config_host_mak
+echo "SHELL=$shell" >> $config_host_mak
 
 # generate list of library paths for linker script
 

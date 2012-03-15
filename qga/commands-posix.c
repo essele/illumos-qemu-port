@@ -35,6 +35,11 @@
 #include "qemu-queue.h"
 #include "host-utils.h"
 
+#if defined(__sun__)
+#include <sys/sockio.h>
+extern char **environ;
+#endif
+
 static void reopen_fd_to_null(int fd)
 {
     int nullfd;
@@ -807,7 +812,11 @@ GuestNetworkInterfaceList *qmp_guest_network_get_interfaces(Error **errp)
                 goto error;
             }
 
+#if defined(__sun__)
+            mac_addr = (unsigned char *) &ifr.ifr_enaddr;
+#else
             mac_addr = (unsigned char *) &ifr.ifr_hwaddr.sa_data;
+#endif
 
             if (asprintf(&info->value->hardware_address,
                          "%02x:%02x:%02x:%02x:%02x:%02x",
