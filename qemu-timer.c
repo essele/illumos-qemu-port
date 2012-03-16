@@ -533,7 +533,11 @@ static int dynticks_start_timer(struct qemu_alarm_timer *t)
 #endif /* SIGEV_THREAD_ID */
     ev.sigev_signo = SIGALRM;
 
+#if defined(__sun__)
+    if (timer_create(CLOCK_HIGHRES, &ev, &host_timer)) {
+#else
     if (timer_create(CLOCK_REALTIME, &ev, &host_timer)) {
+#endif
         perror("timer_create");
 
         /* disable dynticks */
