@@ -15,11 +15,7 @@
 
 #include "qemu-common.h"
 #ifdef CONFIG_KVM
-#ifdef __sun__
-#include <hyperv.h>
-#else
 #include <asm/hyperv.h>
-#endif
 #endif
 
 #ifndef HYPERV_SPINLOCK_NEVER_RETRY

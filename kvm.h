@@ -21,19 +21,10 @@
 #ifdef CONFIG_KVM
 #ifdef __sun__
 #include <sys/kvm.h>
-/*
- * it's a bit horrible to include these here, but the kvm_para.h include file
- * isn't public with the illumos kvm implementation
- */
-#define KVM_CPUID_SIGNATURE       0x40000000
-#define KVM_CPUID_FEATURES        0x40000001
-#define KVM_FEATURE_CLOCKSOURCE   0
-#define KVM_FEATURE_NOP_IO_DELAY  1
-#define KVM_FEATURE_MMU_OP        2
-#define KVM_FEATURE_CLOCKSOURCE2  3
-#define HYPERV_CPUID_MIN          0x40000005
+#include <sys/kvm_para.h>
 #else
 #include <linux/kvm.h>
+#include <linux/kvm_para.h>
 #endif
 #endif
 

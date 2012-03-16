@@ -2857,10 +2857,7 @@ static ram_addr_t last_ram_offset(void)
 static int
 qemu_mlock(caddr_t base, ram_addr_t size)
 {
-  /* LEE - todo */
-  qemu_real_host_page_size = getpagesize();
-
-  ram_addr_t ps = qemu_real_host_page_size, nbytes, locked = 0;
+  ram_addr_t ps = getpagesize(), nbytes, locked = 0;
   ram_addr_t remaining = size / ps;
   ram_addr_t step = remaining;
   timespec_t tv;
@@ -2895,7 +2892,7 @@ qemu_mlock(caddr_t base, ram_addr_t size)
         }
 
         if (waiting == 0) {
-            waiting = gethrtime();
+            waiting = qemu_get_clock_ns(rt_clock);
         }
 
         if (step > 1) {
@@ -2905,7 +2902,7 @@ qemu_mlock(caddr_t base, ram_addr_t size)
 
         (void) nanosleep(&tv, NULL);
 
-        if (gethrtime() - waiting > threshold) {
+        if (qemu_get_clock_ns(rt_clock) - waiting > threshold) {
             (void) fprintf(stderr, "qemu_mlock: have only "
               "locked %ld of %ld bytes; still "
               "trying...\n", locked, size);

@@ -3726,6 +3726,9 @@ includes="-I\$(SRC_PATH)/tcg $includes"
 if test "$linux" = "yes" ; then
   includes="-I\$(SRC_PATH)/linux-headers $includes"
 fi
+if test "$solaris" = "yes"; then
+  includes="-I\$(SRC_PATH)/solaris-headers $includes"
+fi
 
 if test "$target_user_only" = "yes" ; then
     libdis_config_mak=libdis-user/config.mak

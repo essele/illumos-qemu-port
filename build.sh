@@ -37,7 +37,7 @@ echo "==> Running configure"
 #		--target-list=x86_64-softmmu \
 #    --extra-cflags="-I${PNGDIR}/proto/usr/local/include -I/root/dev/kvm -DDEBUG_KVM -DDEBUG_IOPORT -DDEBUG_UNUSED_IOPORT -DDEBUG_IRQ" \
 ./configure \
-    --extra-cflags="-I${PNGDIR}/proto/usr/local/include -I/root/dev/kvm" \
+    --extra-cflags="-I${PNGDIR}/proto/usr/local/include" \
     --extra-ldflags="-L${PNGDIR}/proto/usr/local/lib -lz -lm" \
     --prefix=/smartdc \
 		--datadir=/roms \

@@ -18,12 +18,6 @@
 #include <sys/mman.h>
 #include <stdarg.h>
 
-#ifdef __sun__
-#include <sys/kvm.h>
-#else
-#include <linux/kvm.h>
-#endif
-
 #include "qemu-common.h"
 #include "qemu-barrier.h"
 #include "sysemu.h"
@@ -185,7 +179,6 @@ static int kvm_set_user_memory_region(KVMState *s, KVMSlot *slot)
     struct kvm_userspace_memory_region mem;
 #ifdef CONFIG_SOLARIS
     caddr_t p;
-    char c;
 #endif
 
     mem.slot = slot->slot;
@@ -194,10 +187,14 @@ static int kvm_set_user_memory_region(KVMState *s, KVMSlot *slot)
     mem.userspace_addr = (unsigned long)slot->ram;
     mem.flags = slot->flags;
 #ifdef CONFIG_SOLARIS
+    /* we need to touch each page, presumably to ensure that
+     * mlock() will succeed, so we use volatile to ensure it
+     * doesn't get optimised away
+     */
     for (p = (caddr_t)mem.userspace_addr;
       p < (caddr_t)mem.userspace_addr + mem.memory_size;
       p += PAGE_SIZE)
-        c = *p;
+        (void) *(volatile char *)p;
 #endif /* CONFIG_SOLARIS */
 
     if (s->migration_log) {
@@ -259,7 +256,6 @@ int kvm_init_vcpu(CPUArchState *env)
         goto err;
     }
     env->kvm_fd = ret;
-    env->kvm_state = kvm_state;
 
     ret = ioctl(env->kvm_fd, KVM_CREATE_VCPU, env->cpu_index);
 #else
@@ -272,8 +268,8 @@ int kvm_init_vcpu(CPUArchState *env)
 
 #ifndef CONFIG_SOLARIS
     env->kvm_fd = ret;
-    env->kvm_state = s;
 #endif
+    env->kvm_state = s;
     env->kvm_vcpu_dirty = 1;
 
     mmap_size = kvm_ioctl(s, KVM_GET_VCPU_MMAP_SIZE, 0);
@@ -1715,7 +1711,6 @@ int kvm_set_signal_mask(CPUArchState *env, const sigset_t *sigset)
 
 int kvm_set_ioeventfd_mmio_long(int fd, uint32_t addr, uint32_t val, bool assign)
 {
-#ifdef CONFIG_EVENTFD
     int ret;
     struct kvm_ioeventfd iofd;
 
@@ -1740,14 +1735,10 @@ int kvm_set_ioeventfd_mmio_long(int fd, uint32_t addr, uint32_t val, bool assign
     }
 
     return 0;
-#else
-    return -ENOSYS;
-#endif
 }
 
 int kvm_set_ioeventfd_pio_word(int fd, uint16_t addr, uint16_t val, bool assign)
 {
-#ifdef CONFIG_EVENTFD
     struct kvm_ioeventfd kick = {
         .datamatch = val,
         .addr = addr,
@@ -1767,9 +1758,6 @@ int kvm_set_ioeventfd_pio_word(int fd, uint16_t addr, uint16_t val, bool assign)
         return r;
     }
     return 0;
-#else
-    return -ENOSYS;
-#endif
 }
 
 int kvm_on_sigbus_vcpu(CPUArchState *env, int code, void *addr)
