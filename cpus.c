@@ -491,7 +491,7 @@ static void qemu_init_sigbus(void)
     action.sa_sigaction = (void (*)(int, siginfo_t*, void*))sigbus_handler;
     sigaction(SIGBUS, &action, NULL);
 
-#ifndef __sun__
+#if defined(CONFIG_LINUX)
     prctl(PR_MCE_KILL, PR_MCE_KILL_SET, PR_MCE_KILL_EARLY, 0, 0);
 #endif
 }
