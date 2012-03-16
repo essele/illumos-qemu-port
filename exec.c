@@ -2857,7 +2857,7 @@ static ram_addr_t last_ram_offset(void)
 static int
 qemu_mlock(caddr_t base, ram_addr_t size)
 {
-	// LEE - todo
+  /* LEE - todo */
   qemu_real_host_page_size = getpagesize();
 
   ram_addr_t ps = qemu_real_host_page_size, nbytes, locked = 0;
@@ -2885,29 +2885,32 @@ qemu_mlock(caddr_t base, ram_addr_t size)
    * ten seconds with no forward progress.
    */
   while (remaining) {
-    if (step > remaining)
-      step = remaining;
+    if (step > remaining) {
+        step = remaining;
+    }
 
     while (mlock(base, (nbytes = step * ps)) == -1) {
-      if (errno != EAGAIN)
-        return (-1);
+        if (errno != EAGAIN) {
+            return -1;
+        }
 
-      if (waiting == 0)
-        waiting = gethrtime();
+        if (waiting == 0) {
+            waiting = gethrtime();
+        }
 
-      if (step > 1) {
-        step >>= 1;
-        continue;
-      }
+        if (step > 1) {
+            step >>= 1;
+            continue;
+        }
 
-      (void) nanosleep(&tv, NULL);
+        (void) nanosleep(&tv, NULL);
 
-      if (gethrtime() - waiting > threshold) {
-        (void) fprintf(stderr, "qemu_mlock: have only "
-            "locked %ld of %ld bytes; still "
-            "trying...\n", locked, size);
-        waiting = 0;
-      }
+        if (gethrtime() - waiting > threshold) {
+            (void) fprintf(stderr, "qemu_mlock: have only "
+              "locked %ld of %ld bytes; still "
+              "trying...\n", locked, size);
+            waiting = 0;
+        }
     }
 
     waiting = 0;
@@ -2918,7 +2921,7 @@ qemu_mlock(caddr_t base, ram_addr_t size)
     step <<= 1;
   }
 
-  return (0);
+  return 0;
 }
 #endif
 
@@ -3003,16 +3006,17 @@ ram_addr_t qemu_ram_alloc_from_ptr(ram_addr_t size, void *host,
 #endif
 
 #ifdef CONFIG_SOLARIS
-  					/*
-   					 * XXX For right now, we'll lock down the memory.  This needs to be
-   					 * revisited if we implement mmu notifiers in the kernel.
-   					 * Note also that pages are touched in kvm_set_user_memory_region.
-   					 */
-  					if (qemu_mlock((caddr_t)new_block->host, size) != 0) {
-    					fprintf(stderr, "qemu_ram_alloc: Could not lock %ld memory, errno = %d\n",
-          					size, errno);
-    					exit(1);
-  					}
+            /*
+              * XXX For right now, we'll lock down the memory.  This needs
+              * to be revisited if we implement mmu notifiers in the kernel.
+              * Note also that pages are touched in kvm_set_user_memory_region.
+              */
+            if (qemu_mlock((caddr_t)new_block->host, size) != 0) {
+                fprintf(stderr, "qemu_ram_alloc: Could not lock %ld memory,"
+                    " errno = %d\n",
+                    size, errno);
+                exit(1);
+            }
 #endif /*CONFIG_SOLARIS*/
 
             qemu_madvise(new_block->host, size, QEMU_MADV_MERGEABLE);

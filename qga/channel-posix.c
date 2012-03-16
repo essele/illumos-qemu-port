@@ -133,7 +133,7 @@ static gboolean ga_channel_open(GAChannel *c, const gchar *path, GAChannelMethod
             g_critical("error opening channel: %s", strerror(errno));
             exit(EXIT_FAILURE);
         }
-        if(ioctl(fd, I_SETSIG, S_OUTPUT | S_INPUT | S_HIPRI) < 0) {
+        if (ioctl(fd, I_SETSIG, S_OUTPUT | S_INPUT | S_HIPRI) < 0) {
             g_critical("error with setsig on channel: %s", strerror(errno));
             exit(EXIT_FAILURE);
         }

@@ -224,13 +224,15 @@ static int kvm_vm_clone(KVMState *s)
     struct stat stat;
     int fd;
 
-    if (fstat(s->fd, &stat) != 0)
+    if (fstat(s->fd, &stat) != 0) {
         return -errno;
+    }
 
     fd = qemu_open("/dev/kvm", O_RDWR);
 
-    if (fd == -1)
-         return -errno;
+    if (fd == -1) {
+        return -errno;
+    }
 
     if (ioctl(fd, KVM_CLONE, stat.st_rdev) == -1) {
         close(fd);
@@ -1078,7 +1080,7 @@ int kvm_init(void)
         goto err;
     }
 #ifdef CONFIG_SOLARIS
-		s->vmfd = s->fd;
+    s->vmfd = s->fd;
 #endif
 
     missing_cap = kvm_check_extension_list(s, kvm_required_capabilites);
@@ -1739,7 +1741,7 @@ int kvm_set_ioeventfd_mmio_long(int fd, uint32_t addr, uint32_t val, bool assign
 
     return 0;
 #else
-		return -ENOSYS;
+    return -ENOSYS;
 #endif
 }
 
@@ -1766,7 +1768,7 @@ int kvm_set_ioeventfd_pio_word(int fd, uint16_t addr, uint16_t val, bool assign)
     }
     return 0;
 #else
-		return -ENOSYS;
+    return -ENOSYS;
 #endif
 }
 
