@@ -3004,10 +3004,10 @@ ram_addr_t qemu_ram_alloc_from_ptr(ram_addr_t size, void *host,
 
 #ifdef CONFIG_SOLARIS
             /*
-              * XXX For right now, we'll lock down the memory.  This needs
-              * to be revisited if we implement mmu notifiers in the kernel.
-              * Note also that pages are touched in kvm_set_user_memory_region.
-              */
+             * XXX For right now, we'll lock down the memory.  This needs
+             * to be revisited if we implement mmu notifiers in the kernel.
+             * Note also that pages are touched in kvm_set_user_memory_region.
+             */
             if (qemu_mlock((caddr_t)new_block->host, size) != 0) {
                 fprintf(stderr, "qemu_ram_alloc: Could not lock %ld memory,"
                     " errno = %d\n",

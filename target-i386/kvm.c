@@ -370,6 +370,7 @@ int kvm_arch_init_vcpu(CPUX86State *env)
 
     cpuid_i = 0;
 
+#ifdef LEE_DONT_DO_THIS
     /* Paravirtualization CPUIDs */
     c = &cpuid_data.entries[cpuid_i++];
     memset(c, 0, sizeof(*c));
@@ -440,6 +441,7 @@ int kvm_arch_init_vcpu(CPUX86State *env)
     }
 
     has_msr_async_pf_en = c->eax & (1 << KVM_FEATURE_ASYNC_PF);
+#endif
 
     cpu_x86_cpuid(env, 0, 0, &limit, &unused, &unused, &unused);
 
