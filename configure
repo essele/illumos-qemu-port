@@ -144,6 +144,7 @@ libattr=""
 xfs=""
 
 vhost_net="no"
+sunos_vnic=""
 kvm="no"
 gprof="no"
 debug_tcg="no"
@@ -806,6 +807,10 @@ for opt do
   ;;
   --enable-rbd) rbd="yes"
   ;;
+  --disable-sunos-vnic) sunos_vnic="no"
+  ;;
+  --enable-sunos-vnic) sunos_vnic="yes"
+  ;;
   --disable-xfsctl) xfs="no"
   ;;
   --enable-xfsctl) xfs="yes"
@@ -1099,6 +1104,8 @@ echo "  --enable-docs            enable documentation build"
 echo "  --disable-docs           disable documentation build"
 echo "  --disable-vhost-net      disable vhost-net acceleration support"
 echo "  --enable-vhost-net       enable vhost-net acceleration support"
+echo "  --disable-sunos-vnic     disable support for crossbow vnics"
+echo "  --enable-sunos-vnic      enable support for crossbow vnics"
 echo "  --enable-trace-backend=B Set trace backend"
 echo "                           Available backends:" $($shell "$source_path"/scripts/tracetool --list-backends)
 echo "  --with-trace-file=NAME   Full PATH,NAME of file to store traces"
@@ -2057,6 +2064,24 @@ if test "$mingw32" != yes -a "$pthread" = no; then
 fi
 
 ##########################################
+# test for sunos vnic
+
+if test "$sunos_vnic" != "no"; then
+  cat > $TMPC <<EOF
+#include <libdlpi.h>
+int main(void) { return 0; }
+EOF
+  if compile_prog "" "-ldlpi" ; then
+    sunos_vnic=yes
+  else
+    if test "$sunos_vnic" = "yes" ; then
+      feature_not_found "sunos-vnic"
+    fi
+  fi
+fi
+
+
+##########################################
 # rbd probe
 if test "$rbd" != "no" ; then
   cat > $TMPC <<EOF
@@ -2946,6 +2971,7 @@ echo "posix_madvise     $posix_madvise"
 echo "uuid support      $uuid"
 echo "libcap-ng support $cap_ng"
 echo "vhost-net support $vhost_net"
+echo "SunOS VNIC support $sunos_vnic"
 echo "Trace backend     $trace_backend"
 echo "Trace output file $trace_file-<pid>"
 echo "spice support     $spice"
@@ -3234,6 +3260,16 @@ fi
 
 if test "$spice" = "yes" ; then
   echo "CONFIG_SPICE=y" >> $config_host_mak
+fi
+
+if test "$sunos_vnic" = "yes" ; then
+  echo "CONFIG_SUNOS_VNIC=y" >> $config_host_mak
+  LDFLAGS="-ldlpi $LDFLAGS"
+  if test "$kvm" = "yes" ; then
+    echo "CONFIG_SUNOS_VNIC_KVM=y" >> $config_host_mak
+  fi
+else
+    echo "failed"
 fi
 
 if test "$smartcard" = "yes" ; then

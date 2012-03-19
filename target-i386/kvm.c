@@ -352,7 +352,9 @@ int kvm_arch_init_vcpu(CPUX86State *env)
     uint32_t limit, i, j, cpuid_i;
     uint32_t unused;
     struct kvm_cpuid_entry2 *c;
+#ifdef LEE_DONT_DO_THIS
     uint32_t signature[3];
+#endif
     int r;
 
     env->cpuid_features &= kvm_arch_get_supported_cpuid(s, 1, 0, R_EDX);
