@@ -831,6 +831,9 @@ Enable the spice remote desktop protocol. Valid options are
 
 @table @option
 
+@item sock=<sock>
+Path on which to bind a UNIX socket.
+
 @item port=<nr>
 Set the TCP port spice is listening on for plaintext channels.
 

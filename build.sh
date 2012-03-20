@@ -54,7 +54,7 @@ echo "==> Running configure"
     --disable-vnc-sasl \
     --disable-vnc-tls \
     --enable-trace-backend=nop \
-    --disable-spice \
+    --enable-spice \
     --disable-curses \
 		--target-list="x86_64-softmmu" \
     --cpu=x86_64

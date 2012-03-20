@@ -458,6 +458,9 @@ QemuOptsList qemu_spice_opts = {
             .name = "tls-port",
             .type = QEMU_OPT_NUMBER,
         },{
+            .name = "sock",
+            .type = QEMU_OPT_STRING,
+        },{
             .name = "addr",
             .type = QEMU_OPT_STRING,
         },{

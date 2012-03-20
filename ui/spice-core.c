@@ -37,6 +37,8 @@
 #include "monitor.h"
 #include "hw/hw.h"
 
+static const int on=1, off=0;
+
 /* core bits */
 
 static SpiceServer *spice_server;
@@ -550,16 +552,18 @@ void qemu_spice_init(void)
     int port, tls_port, len, addr_flags;
     spice_image_compression_t compression;
     spice_wan_compression_t wan_compr;
+    const char *unix_socket;
 
     qemu_thread_get_self(&me);
 
    if (!opts) {
         return;
     }
+    unix_socket = qemu_opt_get(opts, "sock");
     port = qemu_opt_get_number(opts, "port", 0);
     tls_port = qemu_opt_get_number(opts, "tls-port", 0);
-    if (!port && !tls_port) {
-        error_report("neither port nor tls-port specified for spice");
+    if (!port && !tls_port && !unix_socket) {
+        error_report("neither sock, port nor tls-port specified for spice");
         exit(1);
     }
     if (port < 0 || port > 65535) {
@@ -615,7 +619,6 @@ void qemu_spice_init(void)
     } else if (qemu_opt_get_bool(opts, "ipv6", 0)) {
         addr_flags |= SPICE_ADDR_FLAG_IPV6_ONLY;
     }
-
     spice_server = spice_server_new();
     spice_server_set_addr(spice_server, addr ? addr : "", addr_flags);
     if (port) {
@@ -629,6 +632,15 @@ void qemu_spice_init(void)
                              x509_key_password,
                              x509_dh_file,
                              tls_ciphers);
+    }
+    if (unix_socket) {
+        char *dpy;
+        int lsock;
+        dpy = g_malloc(256);
+        pstrcpy(dpy, 256, unix_socket);
+        lsock = unix_listen(unix_socket, dpy, 256);
+        setsockopt(lsock, SOL_SOCKET, SO_REUSEADDR, (void *)&on, sizeof(on));
+        spice_server_set_listen_socket_fd(spice_server, lsock);
     }
     if (password) {
         spice_server_set_ticket(spice_server, password, 0, 0, 0);
