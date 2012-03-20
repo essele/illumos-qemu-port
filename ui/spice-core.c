@@ -19,6 +19,7 @@
 #include <spice-experimental.h>
 
 #include <netdb.h>
+#include "sysemu.h"
 
 #include "qemu-common.h"
 #include "qemu-spice.h"
@@ -556,7 +557,7 @@ void qemu_spice_init(void)
 
     qemu_thread_get_self(&me);
 
-   if (!opts) {
+    if (!opts) {
         return;
     }
     unix_socket = qemu_opt_get(opts, "sock");
@@ -700,6 +701,11 @@ void qemu_spice_init(void)
 
     qemu_opt_foreach(opts, add_channel, &tls_port, 0);
 
+#if SPICE_SERVER_VERSION >= 0x000a02 /* 0.10.2 */
+    spice_server_set_name(spice_server, qemu_name);
+    spice_server_set_uuid(spice_server, qemu_uuid);
+#endif
+
     if (0 != spice_server_init(spice_server, &core_interface)) {
         error_report("failed to initialize spice server");
         exit(1);
@@ -793,10 +799,3 @@ static void spice_register_config(void)
     qemu_add_opts(&qemu_spice_opts);
 }
 machine_init(spice_register_config);
-
-static void spice_register_types(void)
-{
-    qemu_spice_init();
-}
-
-type_init(spice_register_types)
