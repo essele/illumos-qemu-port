@@ -499,7 +499,8 @@ int unix_listen_opts(QemuOpts *opts)
         fprintf(stderr, "bind(unix:%s): %s\n", un.sun_path, strerror(errno));
         goto err;
     }
-    if (listen(sock, 1) < 0) {
+// LEE TODO: put back to 1
+    if (listen(sock, 5) < 0) {
         fprintf(stderr, "listen(unix:%s): %s\n", un.sun_path, strerror(errno));
         goto err;
     }
