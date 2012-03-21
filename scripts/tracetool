@@ -109,6 +109,37 @@ get_argnames()
     fi
 }
 
+# For dtrace on Solaris we will lose the const, so we will
+# cast the const args to avoid a compiler warning
+get_argnames_with_cast()
+{
+    local nfields field name sep vtype len
+    nfields=0
+    sep="$2"
+    IFS=","
+    for field in $(get_args "$1"); do
+        nfields=$((nfields + 1))
+        field=${field#\ }         # remove leading space
+        field=${field%\ }         # remove trailing space
+        name=${field##*[\*\ ]}    # pull out the last word
+        vtype=${field:0:6}        # first 6 chars
+
+        if [ "$nfields" -gt 1 ]; then
+            printf "$sep ";
+        fi
+  
+        if [ "$vtype" = "const " ]; then
+            len=$((${#field} - ${#name} - 6))
+            vtype=${field:6:$len}
+            printf "(%s)%s" $vtype $name
+        else
+            printf "%s" $name
+        fi
+    done
+    IFS=" "
+}
+
+
 # Get the number of arguments to a trace event
 get_argc()
 {
@@ -158,6 +189,18 @@ linetoc_begin_nop()
 linetoc_nop()
 {
     # No need for function definitions in nop backend
+    return
+}
+
+linetod_nop()
+{
+    # Used when "disabled" events are processed
+    return
+}
+
+linetostap_nop()
+{
+    # Used when "disabled" events are processed
     return
 }
 
@@ -408,7 +451,10 @@ linetoh_dtrace()
     local name args argnames nameupper
     name=$(get_name "$1")
     args=$(get_args "$1")
-    argnames=$(get_argnames "$1", ",")
+    argnames=$(get_argnames_with_cast "$1", ",")
+    if [ "$argnames" = "void" ]; then
+        argnames=""
+    fi
 
     nameupper=`echo $name | tr '[:lower:]' '[:upper:]'`
 
