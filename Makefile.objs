@@ -386,7 +386,7 @@ trace.c-timestamp: $(SRC_PATH)/trace-events $(BUILD_DIR)/config-host.mak
 trace.o: trace.c $(GENERATED_HEADERS)
 
 trace-dtrace.h: trace-dtrace.dtrace
-	$(call quiet-command,dtrace -o $@ -h -s $<, "  GEN   trace-dtrace.h")
+	$(call quiet-command,dtrace $(CONFIG_DTRACE_FLAGS) -o $@ -h -s $<, "  GEN   trace-dtrace.h")
 
 # Normal practice is to name DTrace probe file with a '.d' extension
 # but that gets picked up by QEMU's Makefile as an external dependency
@@ -396,20 +396,20 @@ trace-dtrace.dtrace-timestamp: $(SRC_PATH)/trace-events $(BUILD_DIR)/config-host
 	$(call quiet-command,$(SHELL) $(SRC_PATH)/scripts/tracetool --$(TRACE_BACKEND) -d < $< > $@,"  GEN   trace-dtrace.dtrace")
 	@cmp -s $@ trace-dtrace.dtrace || cp $@ trace-dtrace.dtrace
 
-trace-dtrace.o: trace-dtrace.dtrace $(GENERATED_HEADERS)
-	$(call quiet-command,dtrace -o $@ -G -s $<, "  GEN trace-dtrace.o")
-
-ifeq ($(LIBTOOL),)
-trace-dtrace.lo: trace-dtrace.dtrace
-	@echo "missing libtool. please install and rerun configure."; exit 1
-else
-trace-dtrace.lo: trace-dtrace.dtrace
-	$(call quiet-command,$(LIBTOOL) --mode=compile --tag=CC dtrace -o $@ -G -s $<, "  lt GEN trace-dtrace.o")
-endif
+#trace-dtrace.o: trace-dtrace.dtrace $(GENERATED_HEADERS)
+#	$(call quiet-command,dtrace $(CONFIG_DTRACE_FLAGS) -o $@ -G -s $<, "  GEN trace-dtrace.o")
+#
+#ifeq ($(LIBTOOL),)
+#trace-dtrace.lo: trace-dtrace.dtrace
+#	@echo "missing libtool. please install and rerun configure."; exit 1
+#else
+#trace-dtrace.lo: trace-dtrace.dtrace
+#	$(call quiet-command,$(LIBTOOL) --mode=compile --tag=CC dtrace -o $@ -G -s $<, "  lt GEN trace-dtrace.o")
+#endif
 
 trace/simple.o: trace/simple.c $(GENERATED_HEADERS)
 
-trace-obj-$(CONFIG_TRACE_DTRACE) += trace-dtrace.o
+# LEE trace-obj-$(CONFIG_TRACE_DTRACE) += trace-dtrace.o
 ifneq ($(TRACE_BACKEND),dtrace)
 trace-obj-y = trace.o
 endif

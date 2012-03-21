@@ -33,8 +33,15 @@ endif
 
 LINK = $(call quiet-command,$(CC) $(QEMU_CFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $(sort $(1)) $(LIBS),"  LINK  $(TARGET_DIR)$@")
 
+DTRACE = $(call quiet-command,dtrace $(CONFIG_DTRACE_FLAGS) -o $(1)-dtrace.o -G -s $(2) $(3), "  GEN   $(TARGET_DIR)$(1)-dtrace.o")
+
 %$(EXESUF): %.o
+ifeq ($(TRACE_BACKEND),dtrace)
+	$(call DTRACE,$*,trace-dtrace.dtrace,$^)
+	$(call LINK,$^ $*-dtrace.o)
+else
 	$(call LINK,$^)
+endif
 
 %.a:
 	$(call quiet-command,rm -f $@ && $(AR) rcs $@ $^,"  AR    $(TARGET_DIR)$@")
