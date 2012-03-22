@@ -494,11 +494,44 @@ provider qemu {
 EOF
 }
 
+# With Solaris dtrace bool is unknown and self is a reserved
+# word, so we need to translate these into something acceptable
+solaris_process_args()
+{
+    local nfields field name vtype len
+    nfields=0
+    IFS=","
+    for field in $(get_args "$1"); do
+        nfields=$((nfields + 1))
+        field=${field#\ }         # remove leading space
+        field=${field%\ }         # remove trailing space
+        name=${field##*[\*\ ]}    # pull out the last word
+        len=$((${#field} - ${#name}))
+        vtype=${field:0:$len}
+
+        if [ "$nfields" -gt 1 ]; then
+            printf ", "
+        fi
+
+        if [ "$name" = "self" ]; then
+            name="_self"
+        fi
+        if [ "$vtype" = "bool " ]; then
+            vtype="int "
+        fi
+
+        printf "%s%s" $vtype $name
+    done
+    IFS=" "
+}
+
+
 linetod_dtrace()
 {
     local name args
     name=$(get_name "$1")
     args=$(get_args "$1")
+    args=$(solaris_process_args "$args")
 
     # DTrace provider syntax expects foo() for empty
     # params, not foo(void)
