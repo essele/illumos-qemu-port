@@ -3,6 +3,7 @@
  *
  * Copyright IBM, Corp. 2008
  *           Red Hat, Inc. 2008
+ * Portions Copyright 2011 Joyent, Inc.
  *
  * Authors:
  *  Anthony Liguori   <aliguori@us.ibm.com>
