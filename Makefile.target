@@ -441,13 +441,18 @@ $(QEMU_PROGW): $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y)
 $(QEMU_PROG): $(QEMU_PROGW)
 	$(call quiet-command,$(OBJCOPY) --subsystem console $(QEMU_PROGW) $(QEMU_PROG),"  GEN   $(TARGET_DIR)$(QEMU_PROG)")
 else
-$(QEMU_PROG): $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y)
-ifeq ($(TRACE_BACKEND),dtrace)
-	$(call DTRACE,$(QEMU_PROG),../trace-dtrace.dtrace,$^)
-	$(call LINK,$^ $(QEMU_PROG)-dtrace.o)
-else
-	$(call LINK,$^)
+
+target-trace-objs=$(obj-y) $(obj-$(TARGET_BASE_ARCH)-y)
+target-all-objs=$(target-trace-objs)
+ifdef CONFIG_TRACE_DTRACE
+target-all-objs+=$(QEMU_PROG).dtrace.o
 endif
+
+$(QEMU_PROG).dtrace.o: trace-dtrace.dtrace $(target-trace-objs)
+	$(call DTRACE,$@,../trace-dtrace.dtrace,$(target-trace-objs))
+
+$(QEMU_PROG): $(target-all-objs)
+	$(call LINK,$^)
 endif
 
 gdbstub-xml.c: $(TARGET_XML_FILES) $(SRC_PATH)/scripts/feature_to_c.sh

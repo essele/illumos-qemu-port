@@ -157,9 +157,28 @@ tools-obj-y = $(oslib-obj-y) $(trace-obj-y) qemu-tool.o qemu-timer.o \
 	qemu-timer-common.o main-loop.o notify.o iohandler.o cutils.o async.o
 tools-obj-$(CONFIG_POSIX) += compatfd.o
 
-qemu-img$(EXESUF): qemu-img.o $(tools-obj-y) $(block-obj-y)
-qemu-nbd$(EXESUF): qemu-nbd.o $(tools-obj-y) $(block-obj-y)
-qemu-io$(EXESUF): qemu-io.o cmd.o $(tools-obj-y) $(block-obj-y)
+qemu-img-trace-objs=qemu-img.o $(tools-obj-y) $(block-obj-y)
+qemu-nbd-trace-objs=qemu-nbd.o $(tools-obj-y) $(block-obj-y)
+qemu-io-trace-objs=qemu-io.o cmd.o $(tools-obj-y) $(block-obj-y)
+qemu-img-all-objs=$(qemu-img-trace-objs)
+qemu-nbd-all-objs=$(qemu-nbd-trace-objs)
+qemu-io-all-objs=$(qemu-io-trace-objs)
+ifdef CONFIG_TRACE_DTRACE
+qemu-img-all-objs+=qemu-img.dtrace.o
+qemu-nbd-all-objs+=qemu-nbd.dtrace.o
+qemu-io-trace-objs+=qemu-img.dtrace.o
+endif
+
+qemu-img.dtrace.o: trace-dtrace.dtrace $(qemu-img-trace-objs)
+	$(call DTRACE,$@,trace-dtrace.dtrace,$(qemu-img-trace-objs))
+qemu-nbd.dtrace.o: trace-dtrace.dtrace $(qemu-nbd-trace-objs)
+	$(call DTRACE,$@,trace-dtrace.dtrace,$(qemu-nbd-trace-objs))
+qemu-io.dtrace.o: trace-dtrace.dtrace $(qemu-io-trace-objs)
+	$(call DTRACE,$@,trace-dtrace.dtrace,$(qemu-io-trace-objs))
+
+qemu-img$(EXESUF): $(qemu-img-all-objs)
+qemu-nbd$(EXESUF): $(qemu-nbd-all-objs)
+qemu-io$(EXESUF): $(qemu-io-all-objs)
 
 qemu-bridge-helper$(EXESUF): qemu-bridge-helper.o
 qemu-bridge-helper.o: $(GENERATED_HEADERS)
@@ -205,7 +224,17 @@ QGALIB_GEN=$(addprefix $(qapi-dir)/, qga-qapi-types.h qga-qapi-visit.h qga-qmp-c
 $(QGALIB_OBJ): $(QGALIB_GEN) $(GENERATED_HEADERS)
 $(qga-obj-y) qemu-ga.o: $(QGALIB_GEN) $(GENERATED_HEADERS)
 
-qemu-ga$(EXESUF): qemu-ga.o $(qga-obj-y) $(tools-obj-y) $(qapi-obj-y) $(qobject-obj-y) $(version-obj-y) $(QGALIB_OBJ)
+qemu-ga-trace-objs=qemu-ga.o $(qga-obj-y) $(tools-obj-y) $(qapi-obj-y) $(qobject-obj-y) $(version-obj-y) $(QGALIB_OBJ)
+qemu-ga-all-objs=$(qemu-ga-trace-objs)
+ifdef CONFIG_TRACE_DTRACE
+qemu-ga-all-objs+=qemu-ga.dtrace.o
+endif
+
+qemu-ga.dtrace.o: trace-dtrace.dtrace $(qemu-ga-trace-objs)
+	$(call DTRACE,$@,trace-dtrace.dtrace,$(qemu-ga-trace-objs))
+
+qemu-ga$(EXESUF): $(qemu-ga-all-objs)
+
 
 QEMULIBS=libhw32 libhw64 libuser libdis libdis-user
 
