@@ -448,7 +448,7 @@ ifdef CONFIG_TRACE_DTRACE
 target-all-objs+=$(QEMU_PROG).dtrace.o
 endif
 
-$(QEMU_PROG).dtrace.o: trace-dtrace.dtrace $(target-trace-objs)
+$(QEMU_PROG).dtrace.o: ../trace-dtrace.dtrace $(target-trace-objs)
 	$(call DTRACE,$@,../trace-dtrace.dtrace,$(target-trace-objs))
 
 $(QEMU_PROG): $(target-all-objs)
