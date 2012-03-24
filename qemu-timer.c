@@ -26,6 +26,7 @@
 #include "net.h"
 #include "monitor.h"
 #include "console.h"
+#include "trace.h"
 
 #include "hw/hw.h"
 
@@ -66,9 +67,11 @@ struct QEMUClock {
 struct QEMUTimer {
     QEMUClock *clock;
     int64_t expire_time;	/* in nanoseconds */
+    int64_t interval;
     int scale;
     QEMUTimerCB *cb;
     void *opaque;
+    void *source;
     struct QEMUTimer *next;
 };
 
@@ -82,6 +85,9 @@ struct qemu_alarm_timer {
     timer_t timer;
 #elif defined(_WIN32)
     HANDLE timer;
+#endif
+#if defined(__sun__)
+    void *priv;
 #endif
     char expired;
     char pending;
@@ -104,22 +110,29 @@ static inline int alarm_has_dynticks(struct qemu_alarm_timer *t)
     return !!t->rearm;
 }
 
-static int64_t qemu_next_alarm_deadline(void)
+static int64_t qemu_next_alarm_deadline(struct QEMUTimer **tp)
 {
     int64_t delta;
     int64_t rtdelta;
+    struct QEMUTimer *t;
+
+    if (tp == NULL)
+        tp = &t;
 
     if (!use_icount && vm_clock->active_timers) {
         delta = vm_clock->active_timers->expire_time -
                      qemu_get_clock_ns(vm_clock);
+        *tp = vm_clock->active_timers;
     } else {
         delta = INT32_MAX;
+        *tp = NULL;
     }
     if (host_clock->active_timers) {
         int64_t hdelta = host_clock->active_timers->expire_time -
                  qemu_get_clock_ns(host_clock);
         if (hdelta < delta) {
             delta = hdelta;
+            *tp = host_clock->active_timers;
         }
     }
     if (rt_clock->active_timers) {
@@ -127,6 +140,7 @@ static int64_t qemu_next_alarm_deadline(void)
                  qemu_get_clock_ns(rt_clock));
         if (rtdelta < delta) {
             delta = rtdelta;
+            *tp = rt_clock->active_timers;
         }
     }
 
@@ -142,7 +156,7 @@ static void qemu_rearm_alarm_timer(struct qemu_alarm_timer *t)
         !host_clock->active_timers) {
         return;
     }
-    nearest_delta_ns = qemu_next_alarm_deadline();
+    nearest_delta_ns = qemu_next_alarm_deadline(NULL);
     t->rearm(t, nearest_delta_ns);
 }
 
@@ -165,6 +179,12 @@ static int unix_start_timer(struct qemu_alarm_timer *t);
 static void unix_stop_timer(struct qemu_alarm_timer *t);
 static void unix_rearm_timer(struct qemu_alarm_timer *t, int64_t delta);
 
+#if defined(__sun__)
+static int multiticks_start_timer(struct qemu_alarm_timer *t);
+static void multiticks_stop_timer(struct qemu_alarm_timer *t);
+static void multiticks_rearm_timer(struct qemu_alarm_timer *t, int64_t delta);
+#endif
+
 #if defined(__linux__) || defined(__sun__)
 
 static int dynticks_start_timer(struct qemu_alarm_timer *t);
@@ -177,6 +197,10 @@ static void dynticks_rearm_timer(struct qemu_alarm_timer *t, int64_t delta);
 
 static struct qemu_alarm_timer alarm_timers[] = {
 #ifndef _WIN32
+#if defined(__sun__)
+    {"multiticks", multiticks_start_timer,
+     multiticks_stop_timer, multiticks_rearm_timer},
+#endif
 #if defined(__linux__) || defined(__sun__)
     {"dynticks", dynticks_start_timer,
      dynticks_stop_timer, dynticks_rearm_timer},
@@ -360,9 +384,18 @@ void qemu_mod_timer_ns(QEMUTimer *ts, int64_t expire_time)
         }
         pt = &t->next;
     }
+
+    if (ts->expire_time && expire_time > ts->expire_time) {
+        ts->interval = expire_time - ts->expire_time;
+    } else {
+        ts->interval = 0;
+    }
+
     ts->expire_time = expire_time;
     ts->next = *pt;
     *pt = ts;
+
+    trace_qemu_mod_timer(ts, expire_time, ts->interval);
 
     /* Rearm if necessary  */
     if (pt == &ts->clock->active_timers) {
@@ -412,6 +445,9 @@ static void qemu_run_timers(QEMUClock *clock)
         if (!qemu_timer_expired_ns(ts, current_time)) {
             break;
         }
+
+        trace_qemu_run_timer(ts, ts->expire_time, current_time);
+
         /* remove timer from the list before calling the callback */
         *ptimer_head = ts->next;
         ts->next = NULL;
@@ -495,12 +531,348 @@ static void host_alarm_handler(int host_signum)
 	return;
 
     if (alarm_has_dynticks(t) ||
-        qemu_next_alarm_deadline () <= 0) {
+        qemu_next_alarm_deadline (NULL) <= 0) {
         t->expired = alarm_has_dynticks(t);
         t->pending = 1;
         qemu_notify_event();
     }
 }
+
+#if defined(__sun__)
+
+#define QEMU_MULTITICKS_NSOURCES 8
+
+int multiticks_enabled = 1;
+int multiticks_tolerance_jitter = 20000;
+int64_t multiticks_tolerance_interval = 200000;
+int64_t multiticks_reap_threshold = NANOSEC;
+int multiticks_reap_multiplier = 4;
+
+struct multitick_source {
+    timer_t source;
+    QEMUTimer *timer;
+    int64_t armed;
+    int64_t interval;
+    int64_t initial;
+};
+
+struct qemu_alarm_multiticks {
+    int64_t reaped;
+    struct multitick_source sources[QEMU_MULTITICKS_NSOURCES];
+};
+
+/*
+ * Many QEMU timer consumers seek to create interval timers, but QEMU only has
+ * a one-shot timer facility.  This forces the consumer to effect their own
+ * intervals, an annoying (but not necessarily difficult) task. However, the
+ * problem with using one-shots to implement interval timers is the overhead
+ * of programming the underlying timer (e.g., timer_settime()):  even at
+ * moderate frequencies (e.g., 1 KHz) this overhead can become significant at
+ * modest levels of tenancy.  Given that the underlying POSIX timer facility
+ * is in fact capable of providing interval timers (and given that using the
+ * interval timers is more accurate than effecting the same with a one-shot),
+ * and given that one can have multiple timers in a process, there is an
+ * opportunity to significantly reduce timer programming overhead while
+ * increasing timer accuracy by making better use of POSIX timers.  The
+ * multiticks alarm timer does exactly this via a cache of interval timers,
+ * associating a timer in a one-to-one manner with an underlying source.
+ */
+static int multiticks_start_timer(struct qemu_alarm_timer *t)
+{
+    struct sigevent ev;
+    struct sigaction act;
+    struct qemu_alarm_multiticks *multiticks;
+    struct multitick_source *sources;
+    struct itimerspec timeout;
+    struct timespec res;
+    int64_t resolution, found;
+    int i;
+
+    if (!multiticks_enabled) {
+        fprintf(stderr, "multiticks: programmatically disabled\n");
+        return -1;
+    }
+
+    sigfillset(&act.sa_mask);
+    act.sa_flags = 0;
+    act.sa_handler = host_alarm_handler;
+
+    sigaction(SIGALRM, &act, NULL);
+
+    multiticks = g_malloc0(sizeof (struct qemu_alarm_multiticks));
+    sources = multiticks->sources;
+    t->priv = multiticks;
+
+    memset(&ev, 0, sizeof(ev));
+    ev.sigev_value.sival_int = 0;
+    ev.sigev_notify = SIGEV_SIGNAL;
+    ev.sigev_signo = SIGALRM;
+
+    for (i = 0; i < QEMU_MULTITICKS_NSOURCES; i++)
+        sources[i].source = -1;
+
+    for (i = 0; i < QEMU_MULTITICKS_NSOURCES; i++) {
+        if (timer_create(CLOCK_MONOTONIC, &ev, &sources[i].source) != 0) {
+            perror("multiticks: timer_create");
+            fprintf(stderr, "multiticks: could not create timer; disabling\n");
+            multiticks_stop_timer(t);
+            return -1;
+        }
+    }
+
+    /*
+     * Check that the implementation properly honors an arbitrary interval --
+     * and in particular, an interval that is explicitly not evenly divided
+     * by the resolution.  (Multiticks very much relies on interval timers
+     * being properly implemented; even small errors in the interval can
+     * add up quickly when frequencies are high.)
+     */
+    if (clock_getres(CLOCK_MONOTONIC, &res) != 0) {
+        perror("multiticks: clock_getres");
+        fprintf(stderr, "multiticks: could not get resolution; disabling\n");
+        multiticks_stop_timer(t);
+        return -1;
+    }
+
+    resolution = (res.tv_sec * NANOSEC + res.tv_nsec) * 60 * NANOSEC + 1;
+
+    timeout.it_value.tv_sec = resolution / NANOSEC;
+    timeout.it_value.tv_nsec = resolution % NANOSEC;
+    timeout.it_interval.tv_sec = resolution / NANOSEC;
+    timeout.it_interval.tv_nsec = resolution % NANOSEC;
+
+    if (timer_settime(sources[0].source, TIMER_RELTIME, &timeout, NULL) != 0) {
+        perror("multiticks: timer_settime");
+        fprintf(stderr, "multiticks: could not set test timer; disabling\n");
+        multiticks_stop_timer(t);
+        return -1;
+    }
+
+    if (timer_gettime(sources[0].source, &timeout) != 0) {
+        perror("multiticks: timer_gettime");
+        fprintf(stderr, "multiticks: could not get test timer; disabling\n");
+        multiticks_stop_timer(t);
+        return -1;
+    }
+
+    found = timeout.it_interval.tv_sec * NANOSEC + timeout.it_interval.tv_nsec;
+
+    if (resolution != found) {
+        fprintf(stderr, "multitics: interval not properly honored "
+            "(set to %lld; found %lld); disabling\n",
+            (long long)resolution, (long long)found);
+        multiticks_stop_timer(t);
+        return -1;
+    }
+
+    memset(&timeout, 0, sizeof (timeout));
+    (void) timer_settime(sources[0].source, TIMER_RELTIME, &timeout, NULL);
+
+    return 0;
+}
+
+static void multiticks_stop_timer(struct qemu_alarm_timer *t)
+{
+    struct qemu_alarm_multiticks *multiticks = t->priv;
+    struct multitick_source *sources = multiticks->sources;
+    int i;
+
+    for (i = 0; i < QEMU_MULTITICKS_NSOURCES; i++) {
+        if (sources[i].source != -1)
+            timer_delete(sources[i].source); 
+    }
+
+    qemu_vfree(multiticks);
+    t->priv = NULL;
+}
+
+static struct multitick_source *multiticks_source(struct qemu_alarm_timer *t,
+                                                  QEMUTimer *timer)
+{
+    struct qemu_alarm_multiticks *multiticks = t->priv;
+    struct multitick_source *sources = multiticks->sources, *source;
+    int64_t oldest = INT64_MAX;
+    int i;
+
+    /*
+     * We have a dynamic check here against multiticks_enabled to allow it
+     * to be dynamically disabled after the multiticks alarm timer has been
+     * configured.  When disabled, multiticks should degenerate to an
+     * implementation approximating that of dynticks, allowing for behavior
+     * comparisons to be made without restarting guests.
+     */
+    if (!multiticks_enabled) {
+        source = &sources[0];
+        source->interval = 0;
+    } else {
+        if ((source = timer->source) != NULL && source->timer == timer) {
+            /*
+             * This timer still owns its source -- it wasn't stolen since last
+             * being armed.
+             */
+            return (source);
+        }
+
+        /*
+         * The source has either been stolen from the timer, or it was never
+         * assigned; find a source and assign it.
+         */
+        for (i = 0; i < QEMU_MULTITICKS_NSOURCES; i++) {
+            if (sources[i].armed < oldest) {
+                oldest = sources[i].armed;
+                source = &sources[i];
+            }
+        }
+    }
+
+    trace_multiticks_assign(source->timer, source->source);
+
+    assert(source != NULL);
+    source->timer = timer;
+    timer->source = source;
+
+    return (source);
+}
+
+static void multiticks_reap(struct qemu_alarm_timer *t, int64_t now)
+{
+    struct qemu_alarm_multiticks *multiticks = t->priv;
+    struct multitick_source *sources = multiticks->sources, *source;
+    int multiplier = multiticks_reap_multiplier;
+    struct itimerspec timeout;
+    int64_t interval;
+    int i;
+
+    if (now - multiticks->reaped < multiticks_reap_threshold)
+        return;
+
+    memset(&timeout, 0, sizeof (timeout));
+
+    for (i = 0; i < QEMU_MULTITICKS_NSOURCES; i++) {
+        if (!(interval = sources[i].interval))
+            continue;
+
+        if (sources[i].armed + (multiplier * interval) > now)
+            continue;
+
+        source = &sources[i];
+        trace_multiticks_reap(source->source, source->armed, interval);
+
+        source->interval = 0;
+
+        if (timer_settime(source->source, TIMER_RELTIME, &timeout, NULL) != 0) {
+            perror("timer_settime");
+            fprintf(stderr, "multiticks: internal reaping error; aborting\n");
+            exit(1);
+        }
+    }
+
+    multiticks->reaped = now;
+}
+
+static void multiticks_rearm_timer(struct qemu_alarm_timer *t, 
+                                   int64_t nearest_delta_ns)
+{
+    struct multitick_source *source;
+    struct itimerspec timeout;
+    QEMUTimer *timer;
+    int64_t when, interval;
+    int64_t delta, low, high, now;
+
+    assert(alarm_has_dynticks(t));
+
+    /*
+     * First we need to find the next timer to fire.
+     */
+    low = get_clock();
+    // LEE - TODO: this is called previously, but we need the timer???
+    delta = qemu_next_alarm_deadline(&timer);
+    now = high = get_clock();
+
+    if (delta < MIN_TIMER_REARM_NS)
+        delta = MIN_TIMER_REARM_NS;
+
+    multiticks_reap(t, now);
+
+    if (timer == NULL)
+        return;
+
+    low += delta;
+    high += delta;
+
+    if (timer->clock->type == QEMU_CLOCK_REALTIME) {
+        interval = timer->interval * 1000000;
+    } else {
+        interval = timer->interval;
+    }
+
+    if (interval < multiticks_tolerance_interval)
+        interval = 0;
+
+    source = multiticks_source(t, timer);
+
+    if (interval && source->interval) {
+        int64_t offset, fire;
+
+        if (low < source->initial && source->initial < high) {
+            /*
+             * Our timer has not yet had its initial firing, which is already
+             * scheduled to be within band; we have nothing else to do.
+             */
+            trace_multiticks_inband(source->timer, low, high, source->initial);
+            source->armed = now;
+            return;
+        }
+
+        offset = (low - source->initial) % source->interval;
+        fire = low + (source->interval - offset);
+
+        if (fire < high) {
+            /*
+             * Our timer is going to fire within our band of expectation; we
+             * have nothing else to do.
+             */
+            trace_multiticks_inband(source->timer, low, high, fire);
+            source->armed = now;
+            return;
+        }
+
+        if (fire - high < multiticks_tolerance_jitter) {
+            /*
+             * Our timer is going to fire out of our band of expection, but
+             * within our jitter tolerance; we'll let it ride.
+             */
+            trace_multiticks_inband(source->timer, low, high, fire);
+            source->armed = now;
+            return;
+        }
+
+        trace_multiticks_outofband(source->timer, low, high, fire);
+    }
+
+    /*
+     * We don't actually know the precise (absolute) time to fire, so we'll
+     * take the middle of the band.
+     */
+    when = low + (high - low) / 2;
+
+    trace_multiticks_program(source->timer, when, interval);
+
+    source->interval = interval;
+    source->armed = interval ? now : 0;
+    source->initial = when;
+    timeout.it_value.tv_sec = when / NANOSEC;
+    timeout.it_value.tv_nsec = when % NANOSEC;
+    timeout.it_interval.tv_sec = interval / NANOSEC;
+    timeout.it_interval.tv_nsec = interval % NANOSEC;
+
+    if (timer_settime(source->source, TIMER_ABSTIME, &timeout, NULL) != 0) {
+        perror("timer_settime");
+        fprintf(stderr, "multiticks: internal timer error; aborting\n");
+        exit(1);
+    }
+}
+#endif /* defined(__sun__) */
 
 #if defined(__linux__) || defined(__sun__)
 
@@ -651,7 +1023,7 @@ static void CALLBACK mm_alarm_handler(UINT uTimerID, UINT uMsg,
     if (!t) {
         return;
     }
-    if (alarm_has_dynticks(t) || qemu_next_alarm_deadline() <= 0) {
+    if (alarm_has_dynticks(t) || qemu_next_alarm_deadline(NULL) <= 0) {
         t->expired = alarm_has_dynticks(t);
         t->pending = 1;
         qemu_notify_event();
