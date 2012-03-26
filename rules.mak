@@ -33,7 +33,7 @@ endif
 
 LINK = $(call quiet-command,$(CC) $(QEMU_CFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $(sort $(1)) $(LIBS),"  LINK  $(TARGET_DIR)$@")
 
-ifdef SOLARIS
+ifdef CONFIG_SOLARIS
 DTRACE = $(call quiet-command,dtrace $(CONFIG_DTRACE_FLAGS) -o $(1) -G -s $(2) $(3), "  GEN   $(TARGET_DIR)$(1)")
 else
 DTRACE = $(call quiet-command,dtrace $(CONFIG_DTRACE_FLAGS) -o $(1) -G -s $(2), "  GEN   $(TARGET_DIR)$(1)")
