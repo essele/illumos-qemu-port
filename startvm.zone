@@ -1,0 +1,29 @@
+/usr/bin/bash
+#
+# This is a vm start script that processes the standard arguments from vmadmd
+# and translates them to work with the new qemu.
+#
+export LD_LIBRARY_PATH=/lib/64:/usr/lib/64:/smartdc2/lib
+
+#
+# We need to build the list of arguments... we need to inject 
+# a "machine" and "soundhw" argument, and process the "drive"
+# one to remove the "boot=on" bit.
+#
+ARGV[0]="-machine"
+ARGV[1]="pc,accel=kvm,kernel_irqchip=on"
+ARGV[2]="-soundhw"
+ARGV[3]="ac97"
+argc=4
+for ARG in "$@"; do
+	echo "ARG=$ARG"
+	ARG=${ARG%,boot=on}
+	echo "ARG=$ARG"
+	ARGV[$argc]="$ARG"
+	argc=$((argc + 1))
+done
+
+echo "FINAL ARGS: " ${ARGV[@]}
+
+exec /smartdc2/bin/qemu-system-x86_64 "${ARGV[@]}"
+

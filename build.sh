@@ -36,11 +36,14 @@ echo "==> Running configure"
 #    --enable-trace-backend=dtrace \
 #		--target-list=x86_64-softmmu \
 #    --extra-cflags="-I${PNGDIR}/proto/usr/local/include -I/root/dev/kvm -DDEBUG_KVM -DDEBUG_IOPORT -DDEBUG_UNUSED_IOPORT -DDEBUG_IRQ" \
+#		--datadir=${SMARTOS}/share/qemu \
+
+SMARTDC="/smartdc2"
+
 ./configure \
     --extra-cflags="-I${PNGDIR}/proto/usr/local/include" \
-    --extra-ldflags="-L${PNGDIR}/proto/usr/local/lib -lz -lm" \
-    --prefix=/smartdc \
-		--datadir=/roms \
+    --extra-ldflags="-L${PNGDIR}/proto/usr/local/lib -lz -lm -Wl,-R,${SMARTDC}/lib" \
+    --prefix=${SMARTDC} \
     --audio-card-list=ac97 \
     --audio-drv-list= \
     --disable-bluez \
@@ -50,7 +53,7 @@ echo "==> Running configure"
     --enable-kvm \
     --enable-vnc-png \
     --disable-sdl \
-    --disable-vnc-jpeg \
+    --enable-vnc-jpeg \
     --disable-vnc-sasl \
     --disable-vnc-tls \
     --enable-trace-backend=dtrace \
