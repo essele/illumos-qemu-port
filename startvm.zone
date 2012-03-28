@@ -1,4 +1,4 @@
-/usr/bin/bash
+#!/usr/bin/bash
 #
 # This is a vm start script that processes the standard arguments from vmadmd
 # and translates them to work with the new qemu.
