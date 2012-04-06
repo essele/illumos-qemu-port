@@ -3035,7 +3035,6 @@ if test "$debug_ctf" = "yes" ; then
     echo "CONFIG_DEBUG_CTF=y" >> $config_host_mak
     echo "CTFCONVERT=$ctfconvert" >> $config_host_mak
     echo "CTFMERGE=$ctfmerge" >> $config_host_mak
-    echo "CTF=${source_path}/ctf.sh" >> $config_host_mak
   else
     echo "Can't enable CTF" ; exit 1
   fi

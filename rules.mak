@@ -17,8 +17,9 @@ QEMU_DGFLAGS += -MMD -MP -MT $@ -MF $(*D)/$(*F).d
 %.o: %.c
 	$(call quiet-command,$(CC) $(QEMU_INCLUDES) $(QEMU_CFLAGS) $(QEMU_DGFLAGS) $(CFLAGS) -c -o $@ $<,"  CC    $(TARGET_DIR)$@")
 ifdef CONFIG_DEBUG_CTF
-	$(call quiet-command,$(CTF) $@ || /bin/true,"  CTF	$@")
+	$(call quiet-command,$(CTFCONVERT) -L VERSION -o $@.ctf $@ && mv $@.ctf $@ || /bin/true,"  CTF	$@")
 endif
+#	$(call quiet-command,$(CTF) $@ || /bin/true,"  CTF	$@")
 
 ifeq ($(LIBTOOL),)
 %.lo: %.c
