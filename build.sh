@@ -40,6 +40,13 @@ echo "==> Running configure"
 
 SMARTDC="/smartdc2"
 
+#
+# Make sure ctf utilities are in our path
+#
+KERNEL_SOURCE=$(pwd)/../../illumos
+CTFBINDIR=$KERNEL_SOURCE/usr/src/tools/proto/root_i386-nd/opt/onbld/bin/i386
+export PATH=$PATH:$CTFBINDIR
+
 ./configure \
     --extra-cflags="-I${PNGDIR}/proto/usr/local/include" \
     --extra-ldflags="-L${PNGDIR}/proto/usr/local/lib -lz -lm -Wl,-R,${SMARTDC}/lib" \
@@ -67,13 +74,6 @@ if [[ $? != 0 ]]; then
 	exit 1
 fi
 
-
-#
-# Make sure ctf utilities are in our path
-#
-KERNEL_SOURCE=$(pwd)/../../illumos
-CTFBINDIR=$KERNEL_SOURCE/usr/src/tools/proto/root_i386-nd/opt/onbld/bin/i386
-export PATH=$PATH:$CTFBINDIR
 
 echo "==> Make"
 gmake

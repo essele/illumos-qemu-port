@@ -150,6 +150,7 @@ kvm="no"
 gprof="no"
 debug_tcg="no"
 debug_mon="no"
+debug_ctf="no"
 debug="no"
 strip_opt="yes"
 tcg_interpreter="no"
@@ -261,9 +262,14 @@ QEMU_CFLAGS="-Wstrict-prototypes -Wredundant-decls $QEMU_CFLAGS"
 QEMU_CFLAGS="-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE $QEMU_CFLAGS"
 QEMU_CFLAGS="-D_FORTIFY_SOURCE=2 $QEMU_CFLAGS"
 QEMU_INCLUDES="-I. -I\$(SRC_PATH) -I\$(SRC_PATH)/fpu"
+ctfconvert=$(path_of ctfconvert)
+ctfmerge=$(path_of ctfmerge)
 if test "$debug_info" = "yes"; then
     CFLAGS="-g $CFLAGS"
     LDFLAGS="-g $LDFLAGS"
+    if [ -x "$ctfconvert" ] && [ -x "$ctfmerge" ] ; then
+        debug_ctf="yes"
+    fi
 fi
 
 # make source path absolute
@@ -639,6 +645,10 @@ for opt do
   --enable-debug-mon) debug_mon="yes"
   ;;
   --disable-debug-mon) debug_mon="no"
+  ;;
+  --enable-debug-ctf) debug_ctf="yes"
+  ;;
+  --disable-debug-ctf) debug_ctf="no"
   ;;
   --enable-debug)
       # Enable debugging options that aren't excessively noisy
@@ -1023,6 +1033,7 @@ echo "  --sysconfdir=PATH        install config in PATH/qemu"
 echo "  --enable-debug-tcg       enable TCG debugging"
 echo "  --disable-debug-tcg      disable TCG debugging (default)"
 echo "  --enable-debug           enable common debug build options"
+echo "  --enable-debug-ctf       enable CTF debugging [$debug_ctf]"
 echo "  --enable-sparse          enable sparse checker"
 echo "  --disable-sparse         disable sparse checker (default)"
 echo "  --disable-strip          disable stripping binaries"
@@ -2920,6 +2931,7 @@ echo "host big endian   $bigendian"
 echo "target list       $target_list"
 echo "tcg debug enabled $debug_tcg"
 echo "Mon debug enabled $debug_mon"
+echo "CTF debug enabled $debug_ctf"
 echo "gprof enabled     $gprof"
 echo "sparse enabled    $sparse"
 echo "strip binaries    $strip_opt"
@@ -3017,6 +3029,16 @@ if test "$debug_tcg" = "yes" ; then
 fi
 if test "$debug_mon" = "yes" ; then
   echo "CONFIG_DEBUG_MONITOR=y" >> $config_host_mak
+fi
+if test "$debug_ctf" = "yes" ; then
+  if [ -x "$ctfconvert" ] && [ -x "$ctfmerge" ] && test "$debug_info" = "yes" ; then
+    echo "CONFIG_DEBUG_CTF=y" >> $config_host_mak
+    echo "CTFCONVERT=$ctfconvert" >> $config_host_mak
+    echo "CTFMERGE=$ctfmerge" >> $config_host_mak
+    echo "CTF=${source_path}/ctf.sh" >> $config_host_mak
+  else
+    echo "Can't enable CTF" ; exit 1
+  fi
 fi
 if test "$debug" = "yes" ; then
   echo "CONFIG_DEBUG_EXEC=y" >> $config_host_mak

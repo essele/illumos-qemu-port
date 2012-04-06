@@ -456,6 +456,9 @@ $(QEMU_PROG).dtrace.o: ../trace-dtrace.dtrace $(target-trace-objs)
 
 $(QEMU_PROG): $(target-all-objs)
 	$(call LINK,$^)
+ifdef CONFIG_DEBUG_CTF
+	$(call quiet-command, $(CTFMERGE) -L VERSION -o $@ $(target-all-objs),"  CTF	$@")
+endif
 endif
 
 gdbstub-xml.c: $(TARGET_XML_FILES) $(SRC_PATH)/scripts/feature_to_c.sh
