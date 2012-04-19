@@ -438,7 +438,8 @@ struct kvm_ioeventfd {
 #define KVM_CAP_TSC_DEADLINE_TIMER 72
 #define KVM_CAP_S390_UCONTROL 73
 #define KVM_CAP_SYNC_REGS 74
-
+#define KVM_CAP_PCI_2_3 75
+#define KVM_CAP_KVMCLOCK_CTRL 76
 
 #ifdef KVM_CAP_IRQ_ROUTING
 typedef struct kvm_irq_routing_irqchip {
@@ -596,6 +597,8 @@ typedef struct kvm_clock_data {
 /* Available with KVM_CAP_ONE_REG */
 #define KVM_GET_ONE_REG     _IOW(KVMIO,  0xab, struct kvm_one_reg)
 #define KVM_SET_ONE_REG     _IOW(KVMIO,  0xac, struct kvm_one_reg)
+/* VM is being stopped by host */
+#define KVM_KVMCLOCK_CTRL   _IO(KVMIO,   0xad)
 
 #define KVM_DEV_ASSIGN_ENABLE_IOMMU (1 << 0)
 

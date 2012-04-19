@@ -430,7 +430,7 @@ int qemu_timer_expired(QEMUTimer *timer_head, int64_t current_time)
     return qemu_timer_expired_ns(timer_head, current_time * timer_head->scale);
 }
 
-static void qemu_run_timers(QEMUClock *clock)
+void qemu_run_timers(QEMUClock *clock)
 {
     QEMUTimer **ptimer_head, *ts;
     int64_t current_time;
@@ -508,16 +508,16 @@ void qemu_run_all_timers(void)
 {
     alarm_timer->pending = 0;
 
+    /* vm time timers */
+    qemu_run_timers(vm_clock);
+    qemu_run_timers(rt_clock);
+    qemu_run_timers(host_clock);
+
     /* rearm timer, if not periodic */
     if (alarm_timer->expired) {
         alarm_timer->expired = 0;
         qemu_rearm_alarm_timer(alarm_timer);
     }
-
-    /* vm time timers */
-    qemu_run_timers(vm_clock);
-    qemu_run_timers(rt_clock);
-    qemu_run_timers(host_clock);
 }
 
 #ifdef _WIN32

@@ -246,6 +246,7 @@ clean:
 	rm -f *.o *.d *.a *.lo $(TOOLS) $(HELPERS-y) qemu-ga TAGS cscope.* *.pod *~ */*~
 	rm -Rf .libs
 	rm -f slirp/*.o slirp/*.d audio/*.o audio/*.d block/*.o block/*.d net/*.o net/*.d fsdev/*.o fsdev/*.d ui/*.o ui/*.d qapi/*.o qapi/*.d qga/*.o qga/*.d
+	rm -f qom/*.o qom/*.d
 	rm -f qemu-img-cmds.h
 	rm -f trace/*.o trace/*.d
 	rm -f trace.c trace.h trace.c-timestamp trace.h-timestamp
@@ -356,7 +357,7 @@ TEXIFLAG=$(if $(V),,--quiet)
 	$(call quiet-command,texi2dvi $(TEXIFLAG) -I . $<,"  GEN   $@")
 
 %.html: %.texi
-	$(call quiet-command,$(MAKEINFO) $(MAKEINFOFLAGS) --html $< -o $@, \
+	$(call quiet-command,LC_ALL=C $(MAKEINFO) $(MAKEINFOFLAGS) --html $< -o $@, \
 	"  GEN   $@")
 
 %.info: %.texi
@@ -377,7 +378,6 @@ QMP/qmp-commands.txt: $(SRC_PATH)/qmp-commands.hx
 qemu-img-cmds.texi: $(SRC_PATH)/qemu-img-cmds.hx
 	$(call quiet-command,sh $(SRC_PATH)/scripts/hxtool -t < $< > $@,"  GEN   $@")
 
-POD2MAN = pod2man --utf8
 qemu.1: qemu-doc.texi qemu-options.texi qemu-monitor.texi
 	$(call quiet-command, \
 	  perl -Ww -- $(SRC_PATH)/scripts/texi2pod.pl $< qemu.pod && \

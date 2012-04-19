@@ -314,10 +314,7 @@ EQMP
     {
         .name       = "device_del",
         .args_type  = "id:s",
-        .params     = "device",
-        .help       = "remove device",
-        .user_print = monitor_user_noop,
-        .mhandler.cmd_new = do_device_del,
+        .mhandler.cmd_new = qmp_marshal_input_device_del,
     },
 
 SQMP
@@ -708,7 +705,7 @@ EQMP
     },
     {
         .name       = "transaction",
-        .args_type  = "actions:O",
+        .args_type  = "actions:q",
         .mhandler.cmd_new = qmp_marshal_input_transaction,
     },
 
@@ -2125,7 +2122,7 @@ EQMP
 
     {
         .name       = "qom-set",
-	.args_type  = "path:s,property:s,opts:O",
+	.args_type  = "path:s,property:s,value:q",
 	.mhandler.cmd_new = qmp_qom_set,
     },
 

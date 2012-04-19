@@ -254,6 +254,7 @@ static void cpu_reset_model_id(CPUARMState *env, uint32_t id)
     }
     if (arm_feature(env, ARM_FEATURE_V6K)) {
         set_feature(env, ARM_FEATURE_V6);
+        set_feature(env, ARM_FEATURE_MVFR);
     }
     if (arm_feature(env, ARM_FEATURE_V6)) {
         set_feature(env, ARM_FEATURE_V5);
@@ -278,6 +279,10 @@ static void cpu_reset_model_id(CPUARMState *env, uint32_t id)
     }
 }
 
+/* TODO Move contents into arm_cpu_reset() in cpu.c,
+ *      once cpu_reset_model_id() is eliminated,
+ *      and then forward to cpu_reset() here.
+ */
 void cpu_state_reset(CPUARMState *env)
 {
     uint32_t id;
@@ -400,6 +405,7 @@ static int vfp_gdb_set_reg(CPUARMState *env, uint8_t *buf, int reg)
 
 CPUARMState *cpu_arm_init(const char *cpu_model)
 {
+    ARMCPU *cpu;
     CPUARMState *env;
     uint32_t id;
     static int inited = 0;
@@ -407,7 +413,8 @@ CPUARMState *cpu_arm_init(const char *cpu_model)
     id = cpu_arm_find_by_name(cpu_model);
     if (id == 0)
         return NULL;
-    env = g_malloc0(sizeof(CPUARMState));
+    cpu = ARM_CPU(object_new(TYPE_ARM_CPU));
+    env = &cpu->env;
     cpu_exec_init(env);
     if (tcg_enabled() && !inited) {
         inited = 1;
@@ -491,11 +498,6 @@ static uint32_t cpu_arm_find_by_name(const char *name)
         }
     }
     return id;
-}
-
-void cpu_arm_close(CPUARMState *env)
-{
-    g_free(env);
 }
 
 static int bad_mode_switch(CPUARMState *env, int mode)
@@ -840,7 +842,7 @@ static void do_interrupt_v7m(CPUARMState *env)
     case EXCP_BKPT:
         if (semihosting_enabled) {
             int nr;
-            nr = lduw_code(env->regs[15]) & 0xff;
+            nr = arm_lduw_code(env->regs[15], env->bswap_code) & 0xff;
             if (nr == 0xab) {
                 env->regs[15] += 2;
                 env->regs[0] = do_arm_semihosting(env);
@@ -912,9 +914,10 @@ void do_interrupt(CPUARMState *env)
         if (semihosting_enabled) {
             /* Check for semihosting interrupt.  */
             if (env->thumb) {
-                mask = lduw_code(env->regs[15] - 2) & 0xff;
+                mask = arm_lduw_code(env->regs[15] - 2, env->bswap_code) & 0xff;
             } else {
-                mask = ldl_code(env->regs[15] - 4) & 0xffffff;
+                mask = arm_ldl_code(env->regs[15] - 4, env->bswap_code)
+                    & 0xffffff;
             }
             /* Only intercept calls from privileged modes, to provide some
                semblance of security.  */
@@ -934,7 +937,7 @@ void do_interrupt(CPUARMState *env)
     case EXCP_BKPT:
         /* See if this is a semihosting syscall.  */
         if (env->thumb && semihosting_enabled) {
-            mask = lduw_code(env->regs[15]) & 0xff;
+            mask = arm_lduw_code(env->regs[15], env->bswap_code) & 0xff;
             if (mask == 0xab
                   && (env->uncached_cpsr & CPSR_M) != ARM_CPU_MODE_USR) {
                 env->regs[15] += 2;

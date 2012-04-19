@@ -1313,7 +1313,7 @@ and a @var{name} can be assigned for use in monitor commands.
 Optionally, for PCI cards, you can specify the number @var{v} of MSI-X vectors
 that the card should have; this option currently only affects virtio cards; set
 @var{v} = 0 to disable MSI-X. If no @option{-net} option is specified, a single
-NIC is created.  Qemu can emulate several different models of network card.
+NIC is created.  QEMU can emulate several different models of network card.
 Valid values for @var{type} are
 @code{virtio}, @code{i82551}, @code{i82557b}, @code{i82559er},
 @code{ne2k_pci}, @code{ne2k_isa}, @code{pcnet}, @code{rtl8139},
@@ -2136,7 +2136,7 @@ activates telnet remote echo and single char transfer, then you can
 use the following options to step up a netcat redirector to allow
 telnet on port 5555 to access the qemu port.
 @table @code
-@item Qemu Options:
+@item QEMU Options:
 -serial udp::4555@@:4556
 @item netcat options:
 -u -P 4555 -L 0.0.0.0:4556 -t -p 5555 -I -T
@@ -2456,7 +2456,7 @@ DEF("localtime", 0, QEMU_OPTION_localtime, "", QEMU_ARCH_ALL)
 DEF("startdate", HAS_ARG, QEMU_OPTION_startdate, "", QEMU_ARCH_ALL)
 
 DEF("rtc", HAS_ARG, QEMU_OPTION_rtc, \
-    "-rtc [base=utc|localtime|date][,clock=host|vm][,driftfix=none|slew]\n" \
+    "-rtc [base=utc|localtime|date][,clock=host|rt|vm][,driftfix=none|slew]\n" \
     "                set the RTC base and clock, enable drift fix for clock ticks (x86 only)\n",
     QEMU_ARCH_ALL)
 
@@ -2472,8 +2472,9 @@ format @code{2006-06-17T16:01:21} or @code{2006-06-17}. The default base is UTC.
 By default the RTC is driven by the host system time. This allows to use the
 RTC as accurate reference clock inside the guest, specifically if the host
 time is smoothly following an accurate external reference clock, e.g. via NTP.
-If you want to isolate the guest time from the host, even prevent it from
-progressing during suspension, you can set @option{clock} to @code{vm} instead.
+If you want to isolate the guest time from the host, you can set @option{clock}
+to @code{rt} instead.  To even prevent it from progressing during suspension,
+you can set it to @code{vm}.
 
 Enable @option{driftfix} (i386 targets only) if you experience time drift problems,
 specifically with Windows' ACPI HAL. This option will try to figure out how
@@ -2717,6 +2718,14 @@ This option is only available if QEMU has been compiled with
 the @var{simple} tracing backend.
 @end table
 ETEXI
+
+DEF("qtest", HAS_ARG, QEMU_OPTION_qtest,
+    "-qtest CHR      specify tracing options\n",
+    QEMU_ARCH_ALL)
+
+DEF("qtest-log", HAS_ARG, QEMU_OPTION_qtest_log,
+    "-qtest-log LOG  specify tracing options\n",
+    QEMU_ARCH_ALL)
 
 HXCOMM This is the last statement. Insert new options before this line!
 STEXI

@@ -530,14 +530,14 @@ EOF
   if compile_prog "" "-liberty" ; then
     LIBS="-liberty $LIBS"
   fi
-  prefix="c:/Program Files/Qemu"
+  prefix="c:/Program Files/QEMU"
   mandir="\${prefix}"
   datadir="\${prefix}"
   docdir="\${prefix}"
   bindir="\${prefix}"
   sysconfdir="\${prefix}"
   confsuffix=""
-  libs_qga="-lws2_32 -lwinmm -lpowrprof $lib_qga"
+  libs_qga="-lws2_32 -lwinmm -lpowrprof $libs_qga"
 fi
 
 werror=""
@@ -1264,6 +1264,14 @@ if ! has $python; then
   exit 1
 fi
 
+# Note that if the Python conditional here evaluates True we will exit
+# with status 1 which is a shell 'false' value.
+if ! "$python" -c 'import sys; sys.exit(sys.version_info[0] >= 3)'; then
+  echo "Python 2 required but '$python' is version 3 or better."
+  echo "Use --python=/path/to/python to specify a Python 2."
+  exit 1
+fi
+
 if test -z "$target_list" ; then
     target_list="$default_target_list"
 else
@@ -1869,9 +1877,9 @@ for drv in $audio_drv_list; do
     ;;
 
     pa)
-    audio_drv_probe $drv pulse/simple.h "-lpulse-simple -lpulse" \
-        "pa_simple *s = 0; pa_simple_free(s); return 0;"
-    libs_softmmu="-lpulse -lpulse-simple $libs_softmmu"
+    audio_drv_probe $drv pulse/mainloop.h "-lpulse" \
+        "pa_mainloop *m = 0; pa_mainloop_free (m); return 0;"
+    libs_softmmu="-lpulse $libs_softmmu"
     audio_pt_int="yes"
     ;;
 
@@ -2015,13 +2023,21 @@ fi
 
 ##########################################
 # glib support probe
-if $pkg_config --modversion gthread-2.0 > /dev/null 2>&1 ; then
+
+if test "$mingw32" = yes; then
+    # g_poll is required in order to integrate with the glib main loop.
+    glib_req_ver=2.20
+else
+    glib_req_ver=2.12
+fi
+if $pkg_config --atleast-version=$glib_req_ver gthread-2.0 > /dev/null 2>&1
+then
     glib_cflags=`$pkg_config --cflags gthread-2.0 2>/dev/null`
     glib_libs=`$pkg_config --libs gthread-2.0 2>/dev/null`
     LIBS="$glib_libs $LIBS"
     libs_qga="$glib_libs $libs_qga"
 else
-    echo "glib-2.0 required to compile QEMU"
+    echo "glib-$glib_req_ver required to compile QEMU"
     exit 1
 fi
 
@@ -2401,7 +2417,7 @@ int main(void)
     return 0;
 }
 EOF
-if compile_prog "$ARCH_CFLAGS" "" ; then
+if compile_prog "" "" ; then
   fallocate=yes
 fi
 
@@ -2416,7 +2432,7 @@ int main(void)
     return 0;
 }
 EOF
-if compile_prog "$ARCH_CFLAGS" "" ; then
+if compile_prog "" "" ; then
   sync_file_range=yes
 fi
 
@@ -2433,7 +2449,7 @@ int main(void)
     return 0;
 }
 EOF
-if compile_prog "$ARCH_CFLAGS" "" ; then
+if compile_prog "" "" ; then
   fiemap=yes
 fi
 
@@ -2463,7 +2479,7 @@ int main(void)
     return 0;
 }
 EOF
-if compile_prog "$ARCH_CFLAGS" "" ; then
+if compile_prog "" "" ; then
   epoll=yes
 fi
 
@@ -2486,7 +2502,7 @@ int main(void)
     return epoll_create1 == epoll_create1;
 }
 EOF
-if compile_prog "$ARCH_CFLAGS" "" ; then
+if compile_prog "" "" ; then
   epoll_create1=yes
 fi
 
@@ -2500,7 +2516,7 @@ int main(void)
     return 0;
 }
 EOF
-if compile_prog "$ARCH_CFLAGS" "" ; then
+if compile_prog "" "" ; then
   epoll_pwait=yes
 fi
 
@@ -2656,7 +2672,7 @@ int main(void) {
 #if defined(_POSIX_SYNCHRONIZED_IO) && _POSIX_SYNCHRONIZED_IO > 0
 return fdatasync(0);
 #else
-#abort Not supported
+#error Not supported
 #endif
 }
 EOF
@@ -2712,7 +2728,8 @@ if test "$trace_backend" = "ust"; then
 int main(void) { return 0; }
 EOF
   if compile_prog "" "" ; then
-    LIBS="-lust $LIBS"
+    LIBS="-lust -lurcu-bp $LIBS"
+    libs_qga="-lust -lurcu-bp $libs_qga"
   else
     echo
     echo "Error: Trace backend 'ust' missing libust header files"
@@ -2859,6 +2876,13 @@ if test "$solaris" = "no" ; then
     if $ld --version 2>/dev/null | grep "GNU ld" >/dev/null 2>/dev/null ; then
         LDFLAGS="-Wl,--warn-common $LDFLAGS"
     fi
+fi
+
+# test if pod2man has --utf8 option
+if pod2man --help | grep -q utf8; then
+    POD2MAN="pod2man --utf8"
+else
+    POD2MAN="pod2man"
 fi
 
 # Use ASLR, no-SEH and DEP if available
@@ -3103,12 +3127,12 @@ if test "$cap_ng" = "yes" ; then
   echo "CONFIG_LIBCAP=y" >> $config_host_mak
 fi
 for card in $audio_card_list; do
-    def=CONFIG_`echo $card | tr '[:lower:]' '[:upper:]'`
+    def=CONFIG_`echo $card | LC_ALL=C tr '[a-z]' '[A-Z]'`
     echo "$def=y" >> $config_host_mak
 done
 echo "CONFIG_AUDIO_DRIVERS=$audio_drv_list" >> $config_host_mak
 for drv in $audio_drv_list; do
-    def=CONFIG_`echo $drv | tr '[:lower:]' '[:upper:]'`
+    def=CONFIG_`echo $drv | LC_ALL=C tr '[a-z]' '[A-Z]'`
     echo "$def=y" >> $config_host_mak
     if test "$drv" = "fmod"; then
         echo "FMOD_CFLAGS=-I$fmod_inc" >> $config_host_mak
@@ -3426,6 +3450,7 @@ echo "LIBS_TOOLS+=$libs_tools" >> $config_host_mak
 echo "EXESUF=$EXESUF" >> $config_host_mak
 echo "LIBS_QGA+=$libs_qga" >> $config_host_mak
 echo "SHELL=$shell" >> $config_host_mak
+echo "POD2MAN=$POD2MAN" >> $config_host_mak
 
 # generate list of library paths for linker script
 
@@ -3686,7 +3711,7 @@ echo "TARGET_INT_ALIGNMENT=$target_int_alignment" >> $config_target_mak
 echo "TARGET_LONG_ALIGNMENT=$target_long_alignment" >> $config_target_mak
 echo "TARGET_LLONG_ALIGNMENT=$target_llong_alignment" >> $config_target_mak
 echo "TARGET_ARCH=$TARGET_ARCH" >> $config_target_mak
-target_arch_name="`echo $TARGET_ARCH | tr '[:lower:]' '[:upper:]'`"
+target_arch_name="`echo $TARGET_ARCH | LC_ALL=C tr '[a-z]' '[A-Z]'`"
 echo "TARGET_$target_arch_name=y" >> $config_target_mak
 echo "TARGET_ARCH2=$target_arch2" >> $config_target_mak
 # TARGET_BASE_ARCH needs to be defined after TARGET_ARCH
@@ -3833,6 +3858,10 @@ for i in $ARCH $TARGET_BASE_ARCH ; do
     echo "CONFIG_IA64_DIS=y"  >> $config_target_mak
     echo "CONFIG_IA64_DIS=y"  >> $libdis_config_mak
   ;;
+  lm32)
+    echo "CONFIG_LM32_DIS=y"  >> $config_target_mak
+    echo "CONFIG_LM32_DIS=y"  >> $libdis_config_mak
+  ;;
   m68k)
     echo "CONFIG_M68K_DIS=y"  >> $config_target_mak
     echo "CONFIG_M68K_DIS=y"  >> $libdis_config_mak
@@ -3939,7 +3968,8 @@ echo "QEMU_INCLUDES+=$includes" >> $config_target_mak
 done # for target in $targets
 
 # build tree in object directory in case the source is not in the current directory
-DIRS="tests tests/tcg tests/tcg/cris slirp audio block net pc-bios/optionrom"
+DIRS="tests tests/tcg tests/tcg/cris tests/tcg/lm32"
+DIRS="$DIRS slirp audio block net pc-bios/optionrom"
 DIRS="$DIRS pc-bios/spapr-rtas"
 DIRS="$DIRS roms/seabios roms/vgabios"
 DIRS="$DIRS fsdev ui usb"
@@ -3947,6 +3977,7 @@ DIRS="$DIRS qapi qapi-generated"
 DIRS="$DIRS qga trace qom"
 FILES="Makefile tests/tcg/Makefile qdict-test-data.txt"
 FILES="$FILES tests/tcg/cris/Makefile tests/tcg/cris/.gdbinit"
+FILES="$FILES tests/tcg/lm32/Makefile"
 FILES="$FILES pc-bios/optionrom/Makefile pc-bios/keymaps"
 FILES="$FILES pc-bios/spapr-rtas/Makefile"
 FILES="$FILES roms/seabios/Makefile roms/vgabios/Makefile"

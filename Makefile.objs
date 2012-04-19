@@ -215,8 +215,10 @@ hw-obj-$(CONFIG_VIRTIO) += virtio-console.o
 hw-obj-y += usb/libhw.o
 hw-obj-$(CONFIG_VIRTIO_PCI) += virtio-pci.o
 hw-obj-y += fw_cfg.o
-hw-obj-$(CONFIG_PCI) += pci.o pci_bridge.o
+hw-obj-$(CONFIG_PCI) += pci.o pci_bridge.o pci_bridge_dev.o
 hw-obj-$(CONFIG_PCI) += msix.o msi.o
+hw-obj-$(CONFIG_PCI) += shpc.o
+hw-obj-$(CONFIG_PCI) += slotid_cap.o
 hw-obj-$(CONFIG_PCI) += pci_host.o pcie_host.o
 hw-obj-$(CONFIG_PCI) += ioh3420.o xio3130_upstream.o xio3130_downstream.o
 hw-obj-y += watchdog.o
@@ -324,6 +326,8 @@ hw-obj-$(CONFIG_DP8393X) += dp8393x.o
 hw-obj-$(CONFIG_DS1225Y) += ds1225y.o
 hw-obj-$(CONFIG_MIPSNET) += mipsnet.o
 
+hw-obj-y += qtest.o
+
 # Sound
 sound-obj-y =
 sound-obj-$(CONFIG_SB16) += sb16.o
@@ -365,6 +369,7 @@ libdis-$(CONFIG_PPC_DIS) += ppc-dis.o
 libdis-$(CONFIG_S390_DIS) += s390-dis.o
 libdis-$(CONFIG_SH4_DIS) += sh4-dis.o
 libdis-$(CONFIG_SPARC_DIS) += sparc-dis.o
+libdis-$(CONFIG_LM32_DIS) += lm32-dis.o
 
 ######################################################################
 # trace
